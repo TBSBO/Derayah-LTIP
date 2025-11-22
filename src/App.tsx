@@ -386,7 +386,7 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/Derayah-LTIP">
       <AuthProvider>
         <AppContent />
       </AuthProvider>
