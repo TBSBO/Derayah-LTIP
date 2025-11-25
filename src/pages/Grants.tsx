@@ -1682,8 +1682,7 @@ export default function Grants() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="h-2 rounded-full transition-all"
-                              style={{ backgroundColor: brandColor }}
-                              style={{ width: `${vestingProgress}%` }}
+                              style={{ backgroundColor: brandColor, width: `${vestingProgress}%` }}
                             ></div>
                           </div>
                         </div>
@@ -2270,8 +2269,7 @@ export default function Grants() {
                     <div className="w-full bg-gray-200 rounded-full h-3">
                       <div
                         className="h-3 rounded-full transition-all"
-                        style={{ backgroundColor: brandColor }}
-                        style={{ width: `${((computedVestedShares !== null ? computedVestedShares : selectedGrant.vested_shares) / selectedGrant.total_shares) * 100}%` }}
+                        style={{ backgroundColor: brandColor, width: `${((computedVestedShares !== null ? computedVestedShares : selectedGrant.vested_shares) / selectedGrant.total_shares) * 100}%` }}
                       ></div>
                     </div>
                   </div>

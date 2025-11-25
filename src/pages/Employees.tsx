@@ -904,8 +904,7 @@ export default function Employees() {
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
                             className="h-2 rounded-full transition-all"
-                            style={{ backgroundColor: brandColor }}
-                            style={{ width: `${employee.vesting_progress || 0}%` }}
+                            style={{ backgroundColor: brandColor, width: `${employee.vesting_progress || 0}%` }}
                           ></div>
                         </div>
                       </div>

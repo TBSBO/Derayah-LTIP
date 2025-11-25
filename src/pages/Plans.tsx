@@ -1197,20 +1197,6 @@ export default function Plans() {
                                     y: mouseY
                                   });
                                 }
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (pieChartContainerRef.current) {
-                                  const containerRect = pieChartContainerRef.current.getBoundingClientRect();
-                                  const mouseX = e.clientX - containerRect.left;
-                                  const mouseY = e.clientY - containerRect.top;
-                                  setHoveredPlan({
-                                    plan,
-                                    percentage,
-                                    x: mouseX,
-                                    y: mouseY
-                                  });
-                                }
                                 setPlanHighlightLocked((prev) => {
                                   const next = prev === plan.id ? null : plan.id;
                                   setHighlightedPlanId(next);
