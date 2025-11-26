@@ -9,6 +9,7 @@ interface LandingLoginButtonsProps {
 
 export default function LandingLoginButtons({ variant = 'light', align = 'left' }: LandingLoginButtonsProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [preloading, setPreloading] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,6 +24,19 @@ export default function LandingLoginButtons({ variant = 'light', align = 'left' 
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Preload route components on hover for faster navigation
+  const handleMouseEnter = (path: string) => {
+    setPreloading(path);
+    // Preload the route component to reduce lag when clicking
+    if (path === '/employee/login') {
+      import('../pages/EmployeeLogin').finally(() => setPreloading(null));
+    } else if (path === '/login') {
+      import('../pages/Login').finally(() => setPreloading(null));
+    } else {
+      setPreloading(null);
+    }
+  };
 
   const buttonStyles =
     variant === 'dark'
@@ -58,15 +72,20 @@ export default function LandingLoginButtons({ variant = 'light', align = 'left' 
         <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
           {loginOptions.map((option, index) => {
             const Icon = option.icon;
+            const isPreloading = preloading === option.to;
             return (
               <Link
                 key={index}
                 to={option.to}
-                className={menuItemStyles}
+                className={`${menuItemStyles} ${isPreloading ? 'opacity-75' : ''} relative`}
                 onClick={() => setIsOpen(false)}
+                onMouseEnter={() => handleMouseEnter(option.to)}
               >
                 <Icon className="w-4 h-4 text-gray-600" />
                 <span>{option.label}</span>
+                {isPreloading && (
+                  <div className="ml-auto animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                )}
               </Link>
             );
           })}

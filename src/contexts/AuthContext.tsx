@@ -162,13 +162,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           
           return userRoleResult;
-        } else {
-          // If no company_users record found and we just created it, retry
-          if (retryCount < maxRetries) {
-            console.log(`⏳ No company_users record found yet, retrying in ${(retryCount + 1) * 1000}ms...`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-            return loadUserRole(userId, retryCount + 1, maxRetries);
-          }
+        }
+        
+        // SECOND: Check employees table BEFORE retrying
+        // If user is not in company_users, they might be an employee
+        const { data: employeeData, error: employeeError } = await supabase
+          .from('employees')
+          .select('id, company_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (employeeError) {
+          console.warn('Error fetching employee data:', employeeError);
+        }
+          
+        if (employeeData) {
+          console.log('✅ User exists in employees table, treating as employee');
+          return {
+            user_id: userId,
+            email: user?.email || '',
+            company_id: employeeData.company_id,
+            role: 'employee',
+            is_active: true,
+            permissions: null,
+            user_type: 'employee' as const
+          };
+        }
+        
+        // If no company_users record found and no employee found, retry
+        // (in case of race condition during user creation)
+        if (retryCount < maxRetries) {
+          console.log(`⏳ No company_users or employees record found yet, retrying in ${(retryCount + 1) * 1000}ms...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return loadUserRole(userId, retryCount + 1, maxRetries);
         }
         
         // SECOND: Check company_users for active company admin roles (non-super_admin)
@@ -210,29 +236,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           
           return userRoleResult;
-        }
-        
-        // SECOND: Check employees table
-        const { data: employeeData, error: employeeError } = await supabase
-          .from('employees')
-          .select('id, company_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (employeeError) {
-          console.warn('Error fetching employee data:', employeeError);
-        }
-          
-        if (employeeData) {
-          return {
-            user_id: userId,
-            email: user?.email || '',
-            company_id: employeeData.company_id,
-            role: 'employee',
-            is_active: true,
-            permissions: null,
-            user_type: 'employee' as const
-          };
         }
         
         // THIRD: Only if user has NO company association (not in company_users, not in employees),
