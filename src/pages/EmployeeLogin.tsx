@@ -10,18 +10,24 @@ export default function EmployeeLogin() {
       (location.state as { presetEmail?: string; presetPassword?: string } | null) ?? null,
     [location.state]
   );
-  const [email, setEmail] = useState(locationState?.presetEmail ?? 'employee@example.com');
-  const [password, setPassword] = useState(locationState?.presetPassword ?? 'Employee123!');
+  const [email, setEmail] = useState(locationState?.presetEmail ?? '');
+  const [password, setPassword] = useState(locationState?.presetPassword ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Clear any stored email/password from browser autofill on mount
+    // Only use preset values if explicitly provided via location state
     if (locationState?.presetEmail) {
       setEmail(locationState.presetEmail);
+    } else {
+      setEmail('');
     }
     if (locationState?.presetPassword) {
       setPassword(locationState.presetPassword);
+    } else {
+      setPassword('');
     }
   }, [locationState]);
 
@@ -145,6 +151,7 @@ export default function EmployeeLogin() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter your email"
+                  autoComplete="off"
                   required
                 />
               </div>
@@ -164,6 +171,7 @@ export default function EmployeeLogin() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter your password"
+                  autoComplete="new-password"
                   required
                 />
               </div>
