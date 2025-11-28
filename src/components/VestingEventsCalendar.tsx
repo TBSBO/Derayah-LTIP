@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Users, TrendingUp, Calendar, List } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Users, TrendingUp, Calendar, List, Filter, X } from 'lucide-react';
 import { formatVestingEventId, formatDate } from '../lib/dateUtils';
 import type { VestingEventWithDetails } from '../lib/vestingEventsService';
 
@@ -16,11 +16,34 @@ interface CalendarDay {
 }
 
 type ViewMode = 'monthly' | 'annually' | 'decade';
+type DateRangeFilter = 'all' | 'past' | 'upcoming' | 'thisYear' | 'nextYear' | 'next3Months' | 'next6Months';
+
+interface FilterState {
+  status: string[]; // 'all' or specific statuses
+  eventType: string[]; // 'all' or specific event types
+  planType: string[]; // 'all' or specific plan types
+  dateRange: DateRangeFilter;
+  grantId: string | null; // null means all grants
+  minShares: number | null;
+  maxShares: number | null;
+  performanceMet: boolean | null; // null means all, true/false for specific
+}
 
 export default function VestingEventsCalendar({ events, onEventClick }: VestingEventsCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('decade');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    status: ['all'],
+    eventType: ['all'],
+    planType: ['all'],
+    dateRange: 'all',
+    grantId: null,
+    minShares: null,
+    maxShares: null,
+    performanceMet: null,
+  });
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -29,9 +52,114 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Get unique values for filter options
+  const uniqueGrants = useMemo(() => {
+    const grantMap = new Map<string, { id: string; grant_number: string; plan_name: string }>();
+    events.forEach(event => {
+      if (event.grants) {
+        grantMap.set(event.grant_id, {
+          id: event.grant_id,
+          grant_number: event.grants.grant_number || 'Unknown',
+          plan_name: event.grants.incentive_plans?.plan_name_en || 'Unknown Plan'
+        });
+      }
+    });
+    return Array.from(grantMap.values());
+  }, [events]);
+
+  // Apply filters to events
+  const filteredEvents = useMemo(() => {
+    let filtered = [...events];
+
+    // Status filter
+    if (!filters.status.includes('all')) {
+      filtered = filtered.filter(event => filters.status.includes(event.status));
+    }
+
+    // Event type filter
+    if (!filters.eventType.includes('all')) {
+      filtered = filtered.filter(event => filters.eventType.includes(event.event_type));
+    }
+
+    // Plan type filter
+    if (!filters.planType.includes('all')) {
+      filtered = filtered.filter(event => {
+        const planType = event.grants?.incentive_plans?.plan_type;
+        return planType && filters.planType.includes(planType);
+      });
+    }
+
+    // Grant filter
+    if (filters.grantId) {
+      filtered = filtered.filter(event => event.grant_id === filters.grantId);
+    }
+
+    // Date range filter
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    switch (filters.dateRange) {
+      case 'past':
+        filtered = filtered.filter(event => new Date(event.vesting_date) < today);
+        break;
+      case 'upcoming':
+        filtered = filtered.filter(event => new Date(event.vesting_date) >= today);
+        break;
+      case 'thisYear':
+        const currentYear = today.getFullYear();
+        filtered = filtered.filter(event => {
+          const eventYear = new Date(event.vesting_date).getFullYear();
+          return eventYear === currentYear;
+        });
+        break;
+      case 'nextYear':
+        const nextYear = today.getFullYear() + 1;
+        filtered = filtered.filter(event => {
+          const eventYear = new Date(event.vesting_date).getFullYear();
+          return eventYear === nextYear;
+        });
+        break;
+      case 'next3Months':
+        const threeMonthsFromNow = new Date(today);
+        threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+        filtered = filtered.filter(event => {
+          const eventDate = new Date(event.vesting_date);
+          return eventDate >= today && eventDate <= threeMonthsFromNow;
+        });
+        break;
+      case 'next6Months':
+        const sixMonthsFromNow = new Date(today);
+        sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+        filtered = filtered.filter(event => {
+          const eventDate = new Date(event.vesting_date);
+          return eventDate >= today && eventDate <= sixMonthsFromNow;
+        });
+        break;
+      case 'all':
+      default:
+        // No date filtering
+        break;
+    }
+
+    // Share amount filters
+    if (filters.minShares !== null) {
+      filtered = filtered.filter(event => event.shares_to_vest >= filters.minShares!);
+    }
+    if (filters.maxShares !== null) {
+      filtered = filtered.filter(event => event.shares_to_vest <= filters.maxShares!);
+    }
+
+    // Performance filter
+    if (filters.performanceMet !== null) {
+      filtered = filtered.filter(event => event.performance_condition_met === filters.performanceMet);
+    }
+
+    return filtered;
+  }, [events, filters]);
+
   useEffect(() => {
     generateCalendarDays();
-  }, [currentDate, events]);
+  }, [currentDate, filteredEvents]);
 
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear();
@@ -55,7 +183,7 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
     today.setHours(0, 0, 0, 0);
     
     for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-      const dayEvents = events.filter(event => {
+      const dayEvents = filteredEvents.filter(event => {
         const eventDate = new Date(event.vesting_date);
         return eventDate.toDateString() === date.toDateString();
       });
@@ -107,7 +235,7 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
     const monthlyData = [];
     
     for (let month = 0; month < 12; month++) {
-      const monthEvents = events.filter(event => {
+      const monthEvents = filteredEvents.filter(event => {
         const eventDate = new Date(event.vesting_date);
         return eventDate.getFullYear() === year && eventDate.getMonth() === month;
       });
@@ -124,20 +252,20 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
     return monthlyData;
   };
 
-  const yearlyEvents = useMemo(() => getYearlyEventsByMonth(), [currentDate, events]);
+  const yearlyEvents = useMemo(() => getYearlyEventsByMonth(), [currentDate, filteredEvents]);
 
   const monthlyEventCount = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
 
-    return events.filter(event => {
+    return filteredEvents.filter(event => {
       const eventDate = new Date(event.vesting_date);
       return eventDate.getFullYear() === year && eventDate.getMonth() === month;
     }).length;
-  }, [events, currentDate]);
+  }, [filteredEvents, currentDate]);
 
   const decadeYearRange = useMemo(() => {
-    const eventYears = events
+    const eventYears = filteredEvents
       .map(event => new Date(event.vesting_date).getFullYear())
       .filter(year => !Number.isNaN(year));
 
@@ -155,13 +283,13 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
     const start = Math.min(...eventYears);
     const end = Math.max(...eventYears);
 
-    return {
-      start,
-      end,
-      label: `Vesting Outlook (${start} – ${end})`,
-      derivedFromEvents: true
-    };
-  }, [events, currentDate]);
+      return {
+        start,
+        end,
+        label: `Vesting Outlook (${start} – ${end})`,
+        derivedFromEvents: true
+      };
+  }, [filteredEvents, currentDate]);
 
   const decadeEvents = useMemo(() => {
     const { start, end } = decadeYearRange;
@@ -173,7 +301,7 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
 
     return Array.from({ length: Math.max(yearCount, 0) }, (_, offset) => {
       const year = start + offset;
-      const yearEvents = events.filter(event => {
+      const yearEvents = filteredEvents.filter(event => {
         const eventDate = new Date(event.vesting_date);
         return eventDate.getFullYear() === year;
       });
@@ -195,7 +323,7 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
         sampleEvents: yearEvents.slice(0, 3)
       };
     });
-  }, [events, monthNames, decadeYearRange]);
+  }, [filteredEvents, monthNames, decadeYearRange]);
 
   const decadeSummary = useMemo(() => {
     if (decadeEvents.length === 0) {
@@ -378,6 +506,332 @@ export default function VestingEventsCalendar({ events, onEventClick }: VestingE
             </button>
           </div>
         </div>
+
+        {/* Filter Toggle Button */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs sm:text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition"
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filters</span>
+            {Object.values(filters).some(v => {
+              if (Array.isArray(v)) return !v.includes('all') && v.length > 0;
+              if (typeof v === 'string') return v !== 'all';
+              return v !== null;
+            }) && (
+              <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                Active
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setFilters({
+                status: ['all'],
+                eventType: ['all'],
+                planType: ['all'],
+                dateRange: 'all',
+                grantId: null,
+                minShares: null,
+                maxShares: null,
+                performanceMet: null,
+              });
+            }}
+            className="text-xs sm:text-sm text-gray-600 hover:text-gray-900 underline"
+          >
+            Clear All
+          </button>
+        </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+            {/* Quick Filter Buttons */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Quick Filters</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      status: ['due', 'pending'],
+                      dateRange: 'upcoming'
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 transition"
+                >
+                  Action Required
+                </button>
+                <button
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      status: ['vested', 'exercised', 'transferred']
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-green-100 text-green-800 rounded-md hover:bg-green-200 transition"
+                >
+                  Completed
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const quarterEnd = new Date(today);
+                    quarterEnd.setMonth(quarterEnd.getMonth() + 3);
+                    setFilters(prev => ({
+                      ...prev,
+                      dateRange: 'next3Months',
+                      status: ['all']
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition"
+                >
+                  Upcoming This Quarter
+                </button>
+                <button
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      dateRange: 'thisYear',
+                      status: ['all']
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-purple-100 text-purple-800 rounded-md hover:bg-purple-200 transition"
+                >
+                  Upcoming This Year
+                </button>
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Status</label>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'due', 'pending', 'vested', 'exercised', 'transferred'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      if (status === 'all') {
+                        setFilters(prev => ({ ...prev, status: ['all'] }));
+                      } else {
+                        setFilters(prev => ({
+                          ...prev,
+                          status: prev.status.includes('all') 
+                            ? [status] 
+                            : prev.status.includes(status)
+                            ? prev.status.filter(s => s !== status)
+                            : [...prev.status.filter(s => s !== 'all'), status]
+                        }));
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.status.includes(status) || (status === 'all' && filters.status.includes('all'))
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Event Type Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Event Type</label>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'cliff', 'time_based', 'performance_based'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => {
+                      if (type === 'all') {
+                        setFilters(prev => ({ ...prev, eventType: ['all'] }));
+                      } else {
+                        setFilters(prev => ({
+                          ...prev,
+                          eventType: prev.eventType.includes('all')
+                            ? [type]
+                            : prev.eventType.includes(type)
+                            ? prev.eventType.filter(t => t !== type)
+                            : [...prev.eventType.filter(t => t !== 'all'), type]
+                        }));
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.eventType.includes(type) || (type === 'all' && filters.eventType.includes('all'))
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {type === 'all' ? 'All' : type === 'time_based' ? 'Time-based' : type === 'performance_based' ? 'Performance' : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Plan Type Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Plan Type</label>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'ESOP', 'LTIP_RSU', 'LTIP_RSA'].map(planType => (
+                  <button
+                    key={planType}
+                    onClick={() => {
+                      if (planType === 'all') {
+                        setFilters(prev => ({ ...prev, planType: ['all'] }));
+                      } else {
+                        setFilters(prev => ({
+                          ...prev,
+                          planType: prev.planType.includes('all')
+                            ? [planType]
+                            : prev.planType.includes(planType)
+                            ? prev.planType.filter(p => p !== planType)
+                            : [...prev.planType.filter(p => p !== 'all'), planType]
+                        }));
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.planType.includes(planType) || (planType === 'all' && filters.planType.includes('all'))
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {planType === 'all' ? 'All Plans' : planType}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Range Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Date Range</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 'all', label: 'All Dates' },
+                  { value: 'past', label: 'Past' },
+                  { value: 'upcoming', label: 'Upcoming' },
+                  { value: 'thisYear', label: 'This Year' },
+                  { value: 'nextYear', label: 'Next Year' },
+                  { value: 'next3Months', label: 'Next 3 Months' },
+                  { value: 'next6Months', label: 'Next 6 Months' }
+                ].map(range => (
+                  <button
+                    key={range.value}
+                    onClick={() => setFilters(prev => ({ ...prev, dateRange: range.value as DateRangeFilter }))}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.dateRange === range.value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Grant Filter */}
+            {uniqueGrants.length > 1 && (
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-2 block">Grant</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setFilters(prev => ({ ...prev, grantId: null }))}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.grantId === null
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    All Grants
+                  </button>
+                  {uniqueGrants.map(grant => (
+                    <button
+                      key={grant.id}
+                      onClick={() => setFilters(prev => ({ ...prev, grantId: grant.id }))}
+                      className={`px-3 py-1.5 text-xs rounded-md transition ${
+                        filters.grantId === grant.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                      title={grant.plan_name}
+                    >
+                      {grant.grant_number}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Performance Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Performance Condition</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: null, label: 'All' },
+                  { value: true, label: 'Met' },
+                  { value: false, label: 'Not Met' }
+                ].map(perf => (
+                  <button
+                    key={perf.label}
+                    onClick={() => setFilters(prev => ({ ...prev, performanceMet: perf.value }))}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.performanceMet === perf.value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {perf.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Share Amount Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Share Amount</label>
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600">Min:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.minShares ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                      setFilters(prev => ({ ...prev, minShares: value }));
+                    }}
+                    placeholder="0"
+                    className="w-24 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600">Max:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.maxShares ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                      setFilters(prev => ({ ...prev, maxShares: value }));
+                    }}
+                    placeholder="No limit"
+                    className="w-24 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {(filters.minShares !== null || filters.maxShares !== null) && (
+                  <button
+                    onClick={() => setFilters(prev => ({ ...prev, minShares: null, maxShares: null }))}
+                    className="text-xs text-gray-600 hover:text-gray-900 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Calendar Content */}

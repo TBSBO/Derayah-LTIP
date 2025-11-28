@@ -1,21 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { getBatchGrantVestingDetails } from '../lib/vestingUtils';
 import InteractiveVestingTimeline from '../components/InteractiveVestingTimeline';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Filter } from 'lucide-react';
+
+interface FilterState {
+  grantStatus: string[]; // 'all' or specific statuses
+  planType: string[]; // 'all' or specific plan types
+  vestingRecordStatus: string[]; // 'all' or specific statuses
+  dateRange: 'all' | 'past' | 'upcoming' | 'thisYear' | 'nextYear' | 'next3Months' | 'next6Months';
+  minShares: number | null;
+  maxShares: number | null;
+}
 
 export default function EmployeeVesting() {
   const { t } = useTranslation();
   const [grants, setGrants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedGrants, setExpandedGrants] = useState<Set<string>>(new Set());
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    grantStatus: ['all'],
+    planType: ['all'],
+    vestingRecordStatus: ['all'],
+    dateRange: 'all',
+    minShares: null,
+    maxShares: null,
+  });
 
-  useEffect(() => {
-    loadVestingData();
-  }, []);
-
-  const loadVestingData = async () => {
+  const loadVestingData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -83,7 +97,123 @@ export default function EmployeeVesting() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadVestingData();
+  }, [loadVestingData]);
+
+  // Apply filters to grants - MUST be before any early returns
+  const filteredGrants = useMemo(() => {
+    let filtered = [...grants];
+
+    // Grant status filter
+    if (!filters.grantStatus.includes('all')) {
+      filtered = filtered.filter(grant => filters.grantStatus.includes(grant.status));
+    }
+
+    // Plan type filter
+    if (!filters.planType.includes('all')) {
+      filtered = filtered.filter(grant => {
+        const planType = grant.incentive_plans?.plan_type;
+        return planType && filters.planType.includes(planType);
+      });
+    }
+
+    // Share amount filters
+    if (filters.minShares !== null) {
+      filtered = filtered.filter(grant => Number(grant.total_shares) >= filters.minShares!);
+    }
+    if (filters.maxShares !== null) {
+      filtered = filtered.filter(grant => Number(grant.total_shares) <= filters.maxShares!);
+    }
+
+    // Filter vesting records within each grant
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    filtered = filtered.map(grant => {
+      let vestingRecords = grant.individualVestingRecords || [];
+
+      // Vesting record status filter
+      if (!filters.vestingRecordStatus.includes('all')) {
+        vestingRecords = vestingRecords.filter((record: any) =>
+          filters.vestingRecordStatus.includes(record.status)
+        );
+      }
+
+      // Date range filter for vesting records
+      switch (filters.dateRange) {
+        case 'past':
+          vestingRecords = vestingRecords.filter((record: any) => {
+            const recordDate = new Date(record.vesting_date);
+            return recordDate < today;
+          });
+          break;
+        case 'upcoming':
+          vestingRecords = vestingRecords.filter((record: any) => {
+            const recordDate = new Date(record.vesting_date);
+            return recordDate >= today;
+          });
+          break;
+        case 'thisYear':
+          const currentYear = today.getFullYear();
+          vestingRecords = vestingRecords.filter((record: any) => {
+            const recordDate = new Date(record.vesting_date);
+            return recordDate.getFullYear() === currentYear;
+          });
+          break;
+        case 'nextYear':
+          const nextYear = today.getFullYear() + 1;
+          vestingRecords = vestingRecords.filter((record: any) => {
+            const recordDate = new Date(record.vesting_date);
+            return recordDate.getFullYear() === nextYear;
+          });
+          break;
+        case 'next3Months':
+          const threeMonthsFromNow = new Date(today);
+          threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+          vestingRecords = vestingRecords.filter((record: any) => {
+            const recordDate = new Date(record.vesting_date);
+            return recordDate >= today && recordDate <= threeMonthsFromNow;
+          });
+          break;
+        case 'next6Months':
+          const sixMonthsFromNow = new Date(today);
+          sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+          vestingRecords = vestingRecords.filter((record: any) => {
+            const recordDate = new Date(record.vesting_date);
+            return recordDate >= today && recordDate <= sixMonthsFromNow;
+          });
+          break;
+        case 'all':
+        default:
+          // No date filtering
+          break;
+      }
+
+      return {
+        ...grant,
+        individualVestingRecords: vestingRecords
+      };
+    });
+
+    // If vesting record filters are active, hide grants with no matching vesting records
+    const hasVestingRecordFilters = !filters.vestingRecordStatus.includes('all') || filters.dateRange !== 'all';
+    if (hasVestingRecordFilters) {
+      filtered = filtered.filter(grant => (grant.individualVestingRecords || []).length > 0);
+    }
+
+    return filtered;
+  }, [
+    grants, 
+    filters.grantStatus, 
+    filters.planType, 
+    filters.vestingRecordStatus, 
+    filters.dateRange, 
+    filters.minShares, 
+    filters.maxShares
+  ]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
@@ -95,17 +225,242 @@ export default function EmployeeVesting() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-          {t('employeeVesting.title')}
-          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white text-lg font-semibold">
-            {grants.length}
-          </span>
-        </h1>
-        <p className="text-gray-600 mt-1">{t('employeeVesting.description')}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            {t('employeeVesting.title')}
+            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white text-lg font-semibold">
+              {filteredGrants.length}
+            </span>
+          </h1>
+          <p className="text-gray-600 mt-1">{t('employeeVesting.description')}</p>
+        </div>
       </div>
 
-      {grants.map((grant) => (
+      {/* Filter Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition"
+          >
+            <Filter className="w-4 h-4" />
+            <span>Filters</span>
+            {Object.values(filters).some(v => {
+              if (Array.isArray(v)) return !v.includes('all') && v.length > 0;
+              if (typeof v === 'string') return v !== 'all';
+              return v !== null;
+            }) && (
+              <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                Active
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setFilters({
+                grantStatus: ['all'],
+                planType: ['all'],
+                vestingRecordStatus: ['all'],
+                dateRange: 'all',
+                minShares: null,
+                maxShares: null,
+              });
+            }}
+            className="text-sm text-gray-600 hover:text-gray-900 underline"
+          >
+            Clear All
+          </button>
+        </div>
+
+        {showFilters && (
+          <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+            {/* Quick Filter Buttons */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Quick Filters</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      vestingRecordStatus: ['due', 'pending'],
+                      dateRange: 'upcoming'
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 transition"
+                >
+                  Action Required
+                </button>
+                <button
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      vestingRecordStatus: ['vested', 'exercised', 'transferred']
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-green-100 text-green-800 rounded-md hover:bg-green-200 transition"
+                >
+                  Completed
+                </button>
+                <button
+                  onClick={() => {
+                    setFilters(prev => ({
+                      ...prev,
+                      dateRange: 'next3Months',
+                      vestingRecordStatus: ['all']
+                    }));
+                  }}
+                  className="px-3 py-1.5 text-xs bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition"
+                >
+                  Upcoming This Quarter
+                </button>
+              </div>
+            </div>
+
+            {/* Grant Status Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Grant Status</label>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'active', 'pending_signature'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      // Single select - clicking a status selects only that status
+                      setFilters(prev => ({ ...prev, grantStatus: [status] }));
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.grantStatus.includes(status) && filters.grantStatus.length === 1
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {status === 'all' ? 'All' : status === 'pending_signature' ? 'Pending Signature' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Plan Type Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Plan Type</label>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'ESOP', 'LTIP_RSU', 'LTIP_RSA'].map(planType => (
+                  <button
+                    key={planType}
+                    onClick={() => {
+                      // Single select - clicking a plan type selects only that type
+                      setFilters(prev => ({ ...prev, planType: [planType] }));
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.planType.includes(planType) && filters.planType.length === 1
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {planType === 'all' ? 'All Plans' : planType}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Vesting Record Status Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Vesting Record Status</label>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'pending', 'due', 'vested', 'exercised', 'transferred'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      // Single select - clicking a status selects only that status
+                      setFilters(prev => ({ ...prev, vestingRecordStatus: [status] }));
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.vestingRecordStatus.includes(status) && filters.vestingRecordStatus.length === 1
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Range Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Date Range</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 'all', label: 'All Dates' },
+                  { value: 'past', label: 'Past' },
+                  { value: 'upcoming', label: 'Upcoming' },
+                  { value: 'thisYear', label: 'This Year' },
+                  { value: 'nextYear', label: 'Next Year' },
+                  { value: 'next3Months', label: 'Next 3 Months' },
+                  { value: 'next6Months', label: 'Next 6 Months' }
+                ].map(range => (
+                  <button
+                    key={range.value}
+                    onClick={() => setFilters(prev => ({ ...prev, dateRange: range.value as any }))}
+                    className={`px-3 py-1.5 text-xs rounded-md transition ${
+                      filters.dateRange === range.value
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Share Amount Filter */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-2 block">Grant Share Amount</label>
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600">Min:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.minShares ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                      setFilters(prev => ({ ...prev, minShares: value }));
+                    }}
+                    placeholder="0"
+                    className="w-24 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600">Max:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={filters.maxShares ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                      setFilters(prev => ({ ...prev, maxShares: value }));
+                    }}
+                    placeholder="No limit"
+                    className="w-24 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {(filters.minShares !== null || filters.maxShares !== null) && (
+                  <button
+                    onClick={() => setFilters(prev => ({ ...prev, minShares: null, maxShares: null }))}
+                    className="text-xs text-gray-600 hover:text-gray-900 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {filteredGrants.map((grant) => (
         <div key={grant.id} className="bg-white rounded-lg border-2 border-gray-300 shadow-sm p-6">
           <div className="mb-4">
             <h2 className="text-xl font-semibold text-gray-900">{grant.grant_number}</h2>

@@ -519,18 +519,8 @@ This agreement is subject to the terms and conditions of the company's equity in
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-500 mt-4">{t('employeeDashboard.loadingDashboard')}</p>
-        </div>
-      </div>
-    );
-  }
-
   // Memoize default grant data to prevent unnecessary recalculations
+  // IMPORTANT: All hooks must be called before any early returns
   const displayGrantData = useMemo(() => {
     return grantData || {
       grants: [],
@@ -557,6 +547,17 @@ This agreement is subject to the terms and conditions of the company's equity in
       return normalizedDocStatus === 'pending_signature';
     });
   }, [displayGrantData.grants]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-500 mt-4">{t('employeeDashboard.loadingDashboard')}</p>
+        </div>
+      </div>
+    );
+  }
 
   // Debug: Log roadmap data
   console.log('Display Grant Data Roadmap:', displayGrantData.roadmapData);
