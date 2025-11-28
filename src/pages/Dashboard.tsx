@@ -472,21 +472,23 @@ export default function Dashboard() {
     } finally {
       isLoadingRef.current = false;
     }
-  }, [getCurrentCompanyId, isSuperAdmin, companyInfo]);
+  }, [getCurrentCompanyId, isSuperAdmin]); // Removed companyInfo to prevent infinite loop
 
   useEffect(() => {
     // Only load if we have a company ID and haven't loaded yet
-    if (currentCompanyId && !lastLoadedCompanyIdRef.current) {
+    if (currentCompanyId && lastLoadedCompanyIdRef.current !== currentCompanyId) {
       loadDashboardData();
     }
-  }, [currentCompanyId, loadDashboardData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCompanyId]); // Removed loadDashboardData to prevent infinite loop
 
   // Reload dashboard when active company changes (for super admins)
   useEffect(() => {
     if (currentCompanyId && companyInfo?.company_id !== currentCompanyId && lastLoadedCompanyIdRef.current !== currentCompanyId) {
       loadDashboardData();
     }
-  }, [currentCompanyId, companyInfo?.company_id, loadDashboardData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCompanyId, companyInfo?.company_id]); // Removed loadDashboardData to prevent infinite loop
   
   // Load calendar events when company info is available (deferred for better initial load)
   useEffect(() => {
