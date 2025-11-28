@@ -28,27 +28,19 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     loadEmployeeData();
-  }, [loadEmployeeData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount - loadEmployeeData is stable with useCallback
 
   // Function to fetch share price from Tadawul
+  // Optimized: Skip actual fetch to avoid CORS issues and unnecessary network requests
   const fetchTadawulPrice = async (symbol: string) => {
-    try {
-      // Try to fetch from Tadawul public API or market data
-      // Note: This is a placeholder - actual Tadawul API may require authentication or have different endpoints
-      const response = await fetch(`https://dataportal.saudiexchange.sa/wps/portal/tadawul/markets/equities/main-board/${symbol}`, {
-        mode: 'no-cors', // Bypass CORS for now
-      });
-      
-      // Since Tadawul API may have CORS issues, we'll use a fallback
-      // In production, you might want to implement a backend proxy for this
-      console.log('Fetching Tadawul price for:', symbol);
-      
-      // Default to 30 SAR for Derayah if fetching fails
-      return 30;
-    } catch (error) {
-      console.error('Error fetching Tadawul price:', error);
-      return 30; // Default fallback
-    }
+    // Skip the fetch call that causes CORS issues and continuous loading
+    // Use the manual FMV from company data instead, or default to 30
+    // In production, implement a backend proxy for Tadawul API calls
+    if (!symbol) return 30;
+    
+    // Return default immediately to avoid blocking
+    return 30;
   };
 
   const loadEmployeeData = useCallback(async () => {
@@ -257,17 +249,10 @@ export default function EmployeeDashboard() {
             ? Number(companyRes.data.current_fmv)
             : null;
 
+        // Use manual FMV if available, otherwise default to 30
+        // Skip the fetchTadawulPrice call to avoid unnecessary network requests and CORS issues
         let latestPrice = 30;
-
-        if (companyRes.data?.tadawul_symbol) {
-          const fetchedPrice = await fetchTadawulPrice(companyRes.data.tadawul_symbol);
-
-          if (typeof fetchedPrice === 'number' && !Number.isNaN(fetchedPrice)) {
-            latestPrice = fetchedPrice;
-          } else if (manualFmv !== null && !Number.isNaN(manualFmv)) {
-            latestPrice = manualFmv;
-          }
-        } else if (manualFmv !== null && !Number.isNaN(manualFmv)) {
+        if (manualFmv !== null && !Number.isNaN(manualFmv)) {
           latestPrice = manualFmv;
         }
 

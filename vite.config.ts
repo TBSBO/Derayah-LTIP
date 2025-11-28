@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Vendor chunks
+          // Vendor chunks - keep these separate for better caching
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
               return 'react-vendor';
@@ -83,41 +83,38 @@ export default defineConfig(({ mode }) => ({
             if (id.includes('i18next') || id.includes('react-i18next')) {
               return 'i18n-vendor';
             }
-            // Other vendor libraries
+            // Group all other vendors together to reduce chunks
             return 'vendor';
           }
           
-          // Split large pages into separate chunks
-          if (id.includes('src/pages/Dashboard.tsx')) {
-            return 'page-dashboard';
-          }
-          if (id.includes('src/pages/Employees.tsx')) {
-            return 'page-employees';
-          }
-          if (id.includes('src/pages/Plans.tsx')) {
-            return 'page-plans';
-          }
-          if (id.includes('src/pages/Grants.tsx')) {
-            return 'page-grants';
-          }
-          if (id.includes('src/pages/VestingEvents.tsx')) {
-            return 'page-vesting-events';
-          }
-          if (id.includes('src/pages/EmployeeDashboard.tsx')) {
-            return 'page-employee-dashboard';
-          }
-          
-          // Split employee portal pages
-          if (id.includes('src/pages/Employee') && !id.includes('EmployeeDashboard')) {
+          // Group all employee portal pages together (reduces chunks significantly)
+          if (id.includes('src/pages/Employee')) {
             return 'employee-pages';
           }
           
-          // Split operator pages
+          // Group all admin/company pages together (except very large ones)
+          if (id.includes('src/pages/') && 
+              !id.includes('Employee') && 
+              !id.includes('Landing') && 
+              !id.includes('Operator')) {
+            // Only split the largest pages
+            if (id.includes('src/pages/Dashboard.tsx') || 
+                id.includes('src/pages/Employees.tsx') || 
+                id.includes('src/pages/Grants.tsx')) {
+              if (id.includes('Dashboard.tsx')) return 'page-dashboard';
+              if (id.includes('Employees.tsx')) return 'page-employees';
+              if (id.includes('Grants.tsx')) return 'page-grants';
+            }
+            // Group all other admin pages
+            return 'admin-pages';
+          }
+          
+          // Group operator pages
           if (id.includes('src/pages/Operator')) {
             return 'operator-pages';
           }
           
-          // Split landing pages
+          // Group landing pages
           if (id.includes('src/pages/Landing')) {
             return 'landing-pages';
           }
