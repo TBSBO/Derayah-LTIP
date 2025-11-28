@@ -68,14 +68,77 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'supabase-vendor': ['@supabase/supabase-js'],
-          'ui-vendor': ['lucide-react'],
+        manualChunks: (id) => {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            if (id.includes('@supabase')) {
+              return 'supabase-vendor';
+            }
+            if (id.includes('lucide-react')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('i18next') || id.includes('react-i18next')) {
+              return 'i18n-vendor';
+            }
+            // Other vendor libraries
+            return 'vendor';
+          }
+          
+          // Split large pages into separate chunks
+          if (id.includes('src/pages/Dashboard.tsx')) {
+            return 'page-dashboard';
+          }
+          if (id.includes('src/pages/Employees.tsx')) {
+            return 'page-employees';
+          }
+          if (id.includes('src/pages/Plans.tsx')) {
+            return 'page-plans';
+          }
+          if (id.includes('src/pages/Grants.tsx')) {
+            return 'page-grants';
+          }
+          if (id.includes('src/pages/VestingEvents.tsx')) {
+            return 'page-vesting-events';
+          }
+          if (id.includes('src/pages/EmployeeDashboard.tsx')) {
+            return 'page-employee-dashboard';
+          }
+          
+          // Split employee portal pages
+          if (id.includes('src/pages/Employee') && !id.includes('EmployeeDashboard')) {
+            return 'employee-pages';
+          }
+          
+          // Split operator pages
+          if (id.includes('src/pages/Operator')) {
+            return 'operator-pages';
+          }
+          
+          // Split landing pages
+          if (id.includes('src/pages/Landing')) {
+            return 'landing-pages';
+          }
         },
       },
     },
     chunkSizeWarningLimit: 1000,
+    // Enable minification
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: mode === 'production', // Remove console.log in production
+        drop_debugger: true,
+        pure_funcs: mode === 'production' ? ['console.log', 'console.info', 'console.debug'] : [],
+      },
+    },
+    // Enable source maps only in development
+    sourcemap: mode === 'development',
+    // Optimize chunk loading
+    target: 'esnext',
+    cssCodeSplit: true,
   },
   optimizeDeps: {
     exclude: ['lucide-react'],

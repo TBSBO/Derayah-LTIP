@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { Users, Award, Calendar, Clock, CheckCircle, XCircle, PieChart, TrendingUp } from 'lucide-react';
 import PortfolioValuation from '../components/PortfolioValuation';
-import PerformanceChart from '../components/PerformanceChart';
+import { lazy, Suspense } from 'react';
 import VestingEventsCalendar from '../components/VestingEventsCalendar';
 import type { VestingEventWithDetails } from '../lib/vestingEventsService';
+import { getCached, setCached, createCacheKey } from '../lib/queryCache';
+
+// Lazy load heavy chart components
+const PerformanceChart = lazy(() => import('../components/PerformanceChart'));
 
 export default function EmployeeDashboard() {
   const { t, i18n } = useTranslation();
@@ -24,7 +28,7 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     loadEmployeeData();
-  }, []);
+  }, [loadEmployeeData]);
 
   // Function to fetch share price from Tadawul
   const fetchTadawulPrice = async (symbol: string) => {
@@ -47,7 +51,7 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const loadEmployeeData = async () => {
+  const loadEmployeeData = useCallback(async () => {
     try {
       // Get current user from Supabase auth
       const { data: { user } } = await supabase.auth.getUser();
@@ -57,77 +61,125 @@ export default function EmployeeDashboard() {
         return;
       }
 
-      // Get employee data from database using user_id
-      const { data: employee, error: employeeError } = await supabase
-        .from('employees')
-        .select('id, company_id, first_name_en, last_name_en, email, user_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Check cache for employee data
+      const employeeCacheKey = createCacheKey('employee', user.id);
+      let employee = getCached<any>(employeeCacheKey);
 
-      if (employeeError || !employee) {
-        console.error('Error loading employee data:', employeeError);
-        window.location.href = '/employee/login';
-        return;
+      if (!employee) {
+        // Get employee data from database using user_id
+        const { data: employeeData, error: employeeError } = await supabase
+          .from('employees')
+          .select('id, company_id, first_name_en, last_name_en, email, user_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (employeeError || !employeeData) {
+          console.error('Error loading employee data:', employeeError);
+          window.location.href = '/employee/login';
+          return;
+        }
+
+        employee = employeeData;
+        setCached(employeeCacheKey, employee);
       }
 
-      console.log('Loading data for employee:', employee);
+      // Check cache for grants and company data
+      const grantsCacheKey = createCacheKey('grants', employee.id);
+      const companyCacheKey = createCacheKey('company', employee.company_id);
+      const vestingEventsCacheKey = createCacheKey('vesting-events', employee.id);
 
-      const [grantsRes, companyRes, vestingEventsRes] = await Promise.all([
-        supabase
-          .from('grants')
-          .select(`
-            id, 
-            total_shares, 
-            vested_shares, 
-            remaining_unvested_shares, 
-            status, 
-            grant_number, 
-            grant_date,
-            vesting_start_date,
-            vesting_end_date,
-            employee_acceptance_at,
-            generated_documents (
-              id,
-              status,
-              document_type,
-              approved_at,
-              approved_by
-            ),
-            incentive_plans(plan_name_en, plan_type)
-          `)
-          .eq('employee_id', employee.id),
-        supabase
-          .from('companies')
-          .select('tadawul_symbol, current_fmv, fmv_source')
-          .eq('id', employee.company_id)
-          .maybeSingle(),
-        supabase
-          .from('vesting_events')
-          .select(`
-            id,
-            grant_id,
-            employee_id,
-            vesting_date,
-            shares_to_vest,
-            status,
-            event_type,
-            sequence_number,
-            performance_condition_met,
-            performance_notes,
-            processed_at,
-            processed_by,
-            grants (
-              id,
-              grant_number,
+      let cachedGrants = getCached<any[]>(grantsCacheKey);
+      let cachedCompany = getCached<any>(companyCacheKey);
+      let cachedVestingEvents = getCached<any[]>(vestingEventsCacheKey);
+
+      // Prepare queries - use cache if available, otherwise fetch
+      const grantsQuery = cachedGrants 
+        ? Promise.resolve({ data: cachedGrants, error: null })
+        : supabase
+            .from('grants')
+            .select(`
+              id, 
+              total_shares, 
+              vested_shares, 
+              remaining_unvested_shares, 
+              status, 
+              grant_number, 
+              grant_date,
+              vesting_start_date,
+              vesting_end_date,
+              employee_acceptance_at,
+              generated_documents (
+                id,
+                status,
+                document_type
+              ),
               incentive_plans (
                 plan_name_en,
-                plan_code,
                 plan_type
               )
-            )
-          `)
-          .eq('employee_id', employee.id)
-          .order('vesting_date', { ascending: true })
+            `)
+            .eq('employee_id', employee.id)
+            .in('status', ['active', 'pending_signature'])
+            .then((result) => {
+              if (!result.error && result.data) {
+                setCached(grantsCacheKey, result.data);
+              }
+              return result;
+            });
+
+      const companyQuery = cachedCompany
+        ? Promise.resolve({ data: cachedCompany, error: null })
+        : supabase
+            .from('companies')
+            .select('tadawul_symbol, current_fmv, fmv_source')
+            .eq('id', employee.company_id)
+            .maybeSingle()
+            .then((result) => {
+              if (!result.error && result.data) {
+                setCached(companyCacheKey, result.data);
+              }
+              return result;
+            });
+
+      const vestingEventsQuery = cachedVestingEvents
+        ? Promise.resolve({ data: cachedVestingEvents, error: null })
+        : supabase
+            .from('vesting_events')
+            .select(`
+              id,
+              grant_id,
+              employee_id,
+              vesting_date,
+              shares_to_vest,
+              status,
+              event_type,
+              sequence_number,
+              performance_condition_met,
+              performance_notes,
+              grants (
+                id,
+                grant_number,
+                incentive_plans (
+                  plan_name_en,
+                  plan_code,
+                  plan_type
+                )
+              )
+            `)
+            .eq('employee_id', employee.id)
+            .order('vesting_date', { ascending: true })
+            .then((result) => {
+              if (!result.error && result.data) {
+                setCached(vestingEventsCacheKey, result.data);
+              }
+              return result;
+            });
+
+      // Execute all queries in parallel
+      const [grantsRes, companyRes, vestingEventsRes] = await Promise.all([
+        grantsQuery,
+        companyQuery,
+        vestingEventsQuery
       ]);
 
       // Initialize variables outside the if block
@@ -362,7 +414,7 @@ export default function EmployeeDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleReviewContract = (grant: any) => {
     setSelectedGrant(grant);
@@ -493,28 +545,33 @@ This agreement is subject to the terms and conditions of the company's equity in
     );
   }
 
-  // Initialize default grant data if none exists
-  const displayGrantData = grantData || {
-    grants: [],
-    total_shares: 0,
-    vested_shares: 0,
-    remaining_unvested_shares: 0,
-    total_lapsed: 0,
-    next_vesting_date: null,
-    roadmapData: []
-  };
+  // Memoize default grant data to prevent unnecessary recalculations
+  const displayGrantData = useMemo(() => {
+    return grantData || {
+      grants: [],
+      total_shares: 0,
+      vested_shares: 0,
+      remaining_unvested_shares: 0,
+      total_lapsed: 0,
+      next_vesting_date: null,
+      roadmapData: []
+    };
+  }, [grantData]);
 
-  const pendingSignatureGrants = displayGrantData.grants.filter((grant: any) => {
-    // Don't show grants that have been accepted (have employee_acceptance_at)
-    // This is the source of truth - if the grant has been accepted, it shouldn't show in Action Required
-    if (grant.employee_acceptance_at) {
-      return false;
-    }
-    
-    // Check document status or grant status
-    const normalizedDocStatus = grant.document_status?.toLowerCase?.() || grant.status?.toLowerCase?.() || '';
-    return normalizedDocStatus === 'pending_signature';
-  });
+  // Memoize pending signature grants to avoid recalculating on every render
+  const pendingSignatureGrants = useMemo(() => {
+    return displayGrantData.grants.filter((grant: any) => {
+      // Don't show grants that have been accepted (have employee_acceptance_at)
+      // This is the source of truth - if the grant has been accepted, it shouldn't show in Action Required
+      if (grant.employee_acceptance_at) {
+        return false;
+      }
+      
+      // Check document status or grant status
+      const normalizedDocStatus = grant.document_status?.toLowerCase?.() || grant.status?.toLowerCase?.() || '';
+      return normalizedDocStatus === 'pending_signature';
+    });
+  }, [displayGrantData.grants]);
 
   // Debug: Log roadmap data
   console.log('Display Grant Data Roadmap:', displayGrantData.roadmapData);
@@ -1125,7 +1182,9 @@ This agreement is subject to the terms and conditions of the company's equity in
         </div>
       </div>
 
-      <PerformanceChart currentPrice={85.50} vestedShares={displayGrantData.vested_shares} />
+      <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>}>
+        <PerformanceChart currentPrice={85.50} vestedShares={displayGrantData.vested_shares} />
+      </Suspense>
 
       {/* Contract Review Modal */}
       {showContractModal && selectedGrant && (

@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saudi LTIP ESOP Platform</title>
+    
+    <!-- Performance hints -->
+    <meta http-equiv="x-dns-prefetch-control" content="on" />
+    
+    <!-- Preconnect to Supabase for faster API calls -->
+    <link rel="preconnect" href="https://api.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://api.supabase.co" />
+    
+    <!-- Preload critical resources -->
+    <link rel="modulepreload" href="/src/main.tsx" />
+    
+    <!-- Resource hints for better loading -->
+    <link rel="prefetch" as="script" href="/src/main.tsx" />
   </head>
   <body>
     <div id="root"></div>
