@@ -13,11 +13,8 @@
     <link rel="preconnect" href="https://api.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://api.supabase.co" />
     
-    <!-- Preload critical resources -->
-    <link rel="modulepreload" href="/src/main.tsx" />
-    
-    <!-- Resource hints for better loading -->
-    <link rel="prefetch" as="script" href="/src/main.tsx" />
+    <!-- Note: Vite automatically injects modulepreload links during build -->
+    <!-- Manual resource hints removed to prevent MIME type errors on GitHub Pages -->
   </head>
   <body>
     <div id="root"></div>
