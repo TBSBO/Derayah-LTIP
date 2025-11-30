@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Building2, Lock, Mail } from 'lucide-react';
@@ -12,8 +12,26 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, userRole, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect already authenticated users - wait for userRole to be loaded
+  useEffect(() => {
+    if (!authLoading && user) {
+      // Wait for userRole to be determined before redirecting
+      if (userRole) {
+        if (userRole.user_type === 'employee') {
+          navigate('/employee/dashboard', { replace: true });
+        } else if (userRole.user_type === 'super_admin') {
+          navigate('/operator/companies', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
+      }
+      // If userRole is null but we have a user, wait a bit more for it to load
+      // Don't redirect if still loading
+    }
+  }, [user, userRole, authLoading, navigate]);
 
   const handleQuickLogin = async (quickEmail: string, quickPassword: string) => {
     setIsSignUp(false);
@@ -24,13 +42,13 @@ export default function Login() {
       await signIn(quickEmail, quickPassword);
       setEmail(quickEmail);
       setPassword(quickPassword);
-      navigate('/dashboard');
+      // Removed navigate - let the useEffect handle redirect after userRole loads
     } catch (err) {
       console.error('Quick login failed:', err);
       setError(`Quick login failed for ${quickEmail}`);
-    } finally {
       setLoading(false);
     }
+    // Don't set loading to false here - will be set when redirect happens or on error
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,7 +74,7 @@ export default function Login() {
         navigate('/onboarding');
       } else {
         await signIn(email, password);
-        navigate('/dashboard');
+        // Removed navigate - let the useEffect handle redirect after userRole loads
       }
     } catch (err) {
       setError(isSignUp ? 'Failed to create account' : 'Invalid email or password');

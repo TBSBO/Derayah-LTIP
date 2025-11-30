@@ -67,55 +67,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     name: null,
   });
   const isSigningUpRef = useRef(false);
+  const isLoadingUserRoleRef = useRef(false);
+  const currentLoadingUserIdRef = useRef<string | null>(null);
   const SUPER_ADMIN_COMPANY_STORAGE_KEY = 'saas_active_company';
 
   const loadOnboardingProgress = async (companyId: string | null, suppressErrors = false) => {
-    if (!companyId) {
-      setOnboardingProgress(null);
-      setOnboardingLoaded(true);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('company_onboarding_progress')
-      .select('*')
-      .eq('company_id', companyId)
-      .maybeSingle();
-
-    if (error) {
-      if (!suppressErrors && error.code !== 'PGRST116') {
-        console.error('Error loading onboarding progress:', error);
+    try {
+      if (!companyId) {
+        setOnboardingProgress(null);
+        setOnboardingLoaded(true);
+        return;
       }
-      setOnboardingProgress(null);
-      setOnboardingLoaded(true);
-      return;
-    }
 
-    setOnboardingProgress(data);
-    setOnboardingLoaded(true);
+      const { data, error } = await supabase
+        .from('company_onboarding_progress')
+        .select('*')
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      if (error) {
+        if (!suppressErrors && error.code !== 'PGRST116') {
+          console.error('Error loading onboarding progress:', error);
+        }
+        setOnboardingProgress(null);
+        setOnboardingLoaded(true);
+        return;
+      }
+
+      setOnboardingProgress(data);
+      setOnboardingLoaded(true);
+    } catch (error) {
+      console.error('Unexpected error loading onboarding progress:', error);
+      setOnboardingProgress(null);
+      setOnboardingLoaded(true); // Always set to true to prevent infinite loading
+    }
   };
 
   const loadUserRole = async (userId: string, retryCount = 0, maxRetries = 3) => {
+    // Prevent multiple concurrent calls for the same user
+    if (isLoadingUserRoleRef.current && currentLoadingUserIdRef.current === userId) {
+      console.log('⏸️ loadUserRole already in progress for user:', userId);
+      return;
+    }
+
+    isLoadingUserRoleRef.current = true;
+    currentLoadingUserIdRef.current = userId;
+
     try {
       // Verify we have a valid session before querying
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       if (!currentSession) {
         console.warn('⚠️ No session found when loading user role, waiting...');
         if (retryCount < maxRetries) {
+          isLoadingUserRoleRef.current = false;
+          currentLoadingUserIdRef.current = null;
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           return loadUserRole(userId, retryCount + 1, maxRetries);
         }
         throw new Error('No session available');
       }
 
-      // Increased timeout to 10 seconds to handle slower queries
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 10000)
+      // Increase timeout to 30 seconds - queries with retries can take longer
+      const timeoutPromise = new Promise<UserRole | null>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 30000)
       );
 
       const rolePromise = (async () => {
         console.log(`🔍 loadUserRole (attempt ${retryCount + 1}/${maxRetries + 1}): Starting to fetch user role for userId:`, userId);
         console.log('🔍 Current session user ID:', currentSession.user.id);
+        
+        // Get email from session (available immediately)
+        const userEmail = currentSession.user.email || '';
         
         // CRITICAL: FIRST check if user exists in company_users AT ALL (regardless of active status or role)
         // If they do, they are a company-level user, NOT a platform super admin
@@ -131,6 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // If it's a permission error and we haven't retried, try again
           if (anyCompanyUserCheckError.code === '42501' && retryCount < maxRetries) {
             console.log(`⏳ Retrying in ${(retryCount + 1) * 1000}ms...`);
+            isLoadingUserRoleRef.current = false;
+            currentLoadingUserIdRef.current = null;
             await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
             return loadUserRole(userId, retryCount + 1, maxRetries);
           }
@@ -146,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // This ensures they don't see operator navigation and have a company_id set
           const userRoleResult = {
             user_id: companyUser.user_id,
-            email: user?.email || '',
+            email: userEmail,
             company_id: companyUser.company_id,  // CRITICAL: Always set company_id for company users
             role: companyUser.role,
             is_active: companyUser.is_active,
@@ -180,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('✅ User exists in employees table, treating as employee');
           return {
             user_id: userId,
-            email: user?.email || '',
+            email: userEmail,
             company_id: employeeData.company_id,
             role: 'employee',
             is_active: true,
@@ -193,6 +217,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // (in case of race condition during user creation)
         if (retryCount < maxRetries) {
           console.log(`⏳ No company_users or employees record found yet, retrying in ${(retryCount + 1) * 1000}ms...`);
+          isLoadingUserRoleRef.current = false;
+          currentLoadingUserIdRef.current = null;
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           return loadUserRole(userId, retryCount + 1, maxRetries);
         }
@@ -220,7 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // User is a company admin - return immediately
           const userRoleResult = {
             user_id: companyUserData.user_id,
-            email: user?.email || '',
+            email: userEmail,
             company_id: companyUserData.company_id,
             role: companyUserData.role,
             is_active: companyUserData.is_active,
@@ -257,7 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const companyUser = finalCompanyUsersCheck[0];
           return {
             user_id: userId,
-            email: user?.email || '',
+            email: userEmail,
             company_id: companyUser.company_id,
             role: companyUser.role || 'company_admin',
             is_active: true,
@@ -300,7 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const companyUser = tripleCheckCompany[0];
             return {
               user_id: userId,
-              email: user?.email || '',
+              email: userEmail,
               company_id: companyUser.company_id,
               role: 'company_admin',
               is_active: true,
@@ -313,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log('⚠️ Triple-check: User is in company_super_admin_memberships but also in employees - treating as employee');
             return {
               user_id: userId,
-              email: user?.email || '',
+              email: userEmail,
               company_id: tripleCheckEmployee[0].company_id,
               role: 'employee',
               is_active: true,
@@ -325,7 +351,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // User is a super admin - not tied to any specific company
           const userRoleResult = {
             user_id: userId,
-            email: user?.email || '',
+            email: userEmail,
             company_id: null,  // Super admins don't have a default company
             role: 'super_admin',
             is_active: true,
@@ -342,28 +368,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const role = (await Promise.race([rolePromise, timeoutPromise])) as UserRole | null;
       console.log('✅ loadUserRole: Final role result:', role);
-      setUserRole(role);
+      
+      // Only set if we're still loading for the same user (prevent race conditions)
+      if (currentLoadingUserIdRef.current === userId) {
+        setUserRole(role);
 
-      if (role?.company_id) {
-        setActiveCompanyState({ id: role.company_id, name: null });
-        setOnboardingLoaded(false);
-        await loadOnboardingProgress(role.company_id, true);
-      } else {
-        setOnboardingProgress(null);
-        setOnboardingLoaded(true);
+        if (role?.company_id) {
+          setActiveCompanyState({ id: role.company_id, name: null });
+          setOnboardingLoaded(false);
+          await loadOnboardingProgress(role.company_id, true);
+        } else {
+          setOnboardingProgress(null);
+          setOnboardingLoaded(true);
+        }
       }
     } catch (error) {
       console.error('Error loading user role:', error);
       // On timeout, don't clear the user role - keep existing state
       // Only clear on actual errors (not timeouts)
       if (error instanceof Error && error.message === 'Timeout') {
-        console.warn('User role loading timed out, keeping existing state');
+        console.warn('User role loading timed out after 30 seconds, keeping existing state');
         // Still mark onboarding as loaded to prevent infinite loading
-        setOnboardingLoaded(true);
+        if (currentLoadingUserIdRef.current === userId) {
+          setOnboardingLoaded(true);
+        }
       } else {
-        setUserRole(null);
-        setOnboardingProgress(null);
-        setOnboardingLoaded(true);
+        // Only clear if we're still loading for this user
+        if (currentLoadingUserIdRef.current === userId) {
+          setUserRole(null);
+          setOnboardingProgress(null);
+          setOnboardingLoaded(true);
+        }
+      }
+    } finally {
+      // Only clear if we're still loading for this user
+      if (currentLoadingUserIdRef.current === userId) {
+        isLoadingUserRoleRef.current = false;
+        currentLoadingUserIdRef.current = null;
       }
     }
   };
@@ -409,6 +450,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       
+      // Prevent reloading if already loading for this user
+      if (session?.user && isLoadingUserRoleRef.current && currentLoadingUserIdRef.current === session.user.id) {
+        console.log('⏸️ Already loading role for this user, skipping...');
+        setSession(session);
+        setUser(session.user);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -418,6 +468,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserRole(null);
         setOnboardingProgress(null);
         setOnboardingLoaded(true);
+        currentLoadingUserIdRef.current = null; // Clear loading user
       }
       
       setLoading(false);
@@ -636,7 +687,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setActiveCompanyState({ id: null, name: null });
     }
-  }, [userRole?.role, userRole?.company_id]);
+  }, [userRole?.role, userRole?.user_type, userRole?.company_id]);
 
   const value = {
     user,

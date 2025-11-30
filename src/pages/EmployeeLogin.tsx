@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { Building2, Mail, Lock, AlertCircle, Award } from 'lucide-react';
 
 export default function EmployeeLogin() {
@@ -15,6 +16,20 @@ export default function EmployeeLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { user, userRole, loading: authLoading } = useAuth();
+
+  // Redirect already authenticated users
+  useEffect(() => {
+    if (!authLoading && user && userRole) {
+      if (userRole.user_type === 'employee') {
+        navigate('/employee/dashboard', { replace: true });
+      } else if (userRole.user_type === 'super_admin') {
+        navigate('/operator/companies', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, userRole, authLoading, navigate]);
 
   useEffect(() => {
     if (locationState?.presetEmail) {
@@ -78,13 +93,13 @@ export default function EmployeeLogin() {
       // Store employee data in session storage for dashboard access
       sessionStorage.setItem('employee', JSON.stringify(employee));
       
-      console.log('Login successful, redirecting to dashboard...');
-      navigate('/employee/dashboard');
+      console.log('Login successful, waiting for auth context to update...');
+      // Removed navigate - let the redirect useEffect handle navigation after userRole loads
+      // The onAuthStateChange will update user/userRole, which will trigger the redirect useEffect
       
     } catch (error) {
       console.error('Login error:', error);
       setError('Login Failed: An unexpected error occurred. Please try again.');
-    } finally {
       setLoading(false);
     }
   };

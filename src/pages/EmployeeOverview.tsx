@@ -26,7 +26,7 @@ interface Task {
 }
 
 export default function EmployeeOverview() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [portfolioData, setPortfolioData] = useState<any>(null);
@@ -519,6 +519,29 @@ export default function EmployeeOverview() {
     }
   };
 
+  // Format currency with K/M/B abbreviations (rounds down to lowest absolute number with 2 decimals)
+  // Example: 23,060.80 → 23.06K
+  const formatCurrency = (num: number): string => {
+    const absNum = Math.abs(num);
+    if (absNum >= 1000000000) {
+      // For billions: round down to 2 decimals
+      const value = Math.floor((num / 1000000000) * 100) / 100;
+      return value.toFixed(2) + 'B';
+    } else if (absNum >= 1000000) {
+      // For millions: round down to 2 decimals
+      const value = Math.floor((num / 1000000) * 100) / 100;
+      return value.toFixed(2) + 'M';
+    } else if (absNum >= 1000) {
+      // For thousands: round down to 2 decimals
+      const value = Math.floor((num / 1000) * 100) / 100;
+      return value.toFixed(2) + 'K';
+    } else {
+      // For values less than 1000, show with 2 decimals
+      const value = Math.floor(num * 100) / 100;
+      return value.toFixed(2);
+    }
+  };
+
   // Small Donut Chart Component for Plans
   const SmallDonutChart = ({ 
     available, 
@@ -734,7 +757,7 @@ export default function EmployeeOverview() {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="text-3xl font-bold text-gray-900">
-            <span className="text-lg text-gray-400 font-normal">SAR</span> {totalPotentialValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <span className="text-lg text-gray-400 font-normal">SAR</span> {formatCurrency(totalPotentialValue)}
           </div>
           <div className="text-lg text-gray-600 mt-1">
             ({portfolioData?.totalShares.toLocaleString() || 0} shares)
@@ -853,47 +876,89 @@ export default function EmployeeOverview() {
         <div className="lg:col-span-2 space-y-6">
           {/* Total Potential Value Section */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-              {/* Large Donut Chart */}
-              <LargeDonutChart data={mainDonutData} size={280} />
-
-              {/* Value Breakdown */}
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-1">
-                    {t('employeeOverview.totalPotentialValue')}
-                  </h2>
-                  <div className="text-3xl font-bold text-gray-900">
-                    <span className="text-lg text-gray-400 font-normal">SAR</span> {totalPotentialValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-xl text-gray-600 mt-1">
-                    ({portfolioData?.totalShares.toLocaleString() || 0} {t('employeeOverview.shares')})
-                  </div>
-                </div>
-
-                {/* Breakdown List */}
-                <div className="space-y-2 mt-4">
-                  {mainDonutData.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span className="text-sm text-gray-700">{item.label}:</span>
+            <div className={`flex flex-col md:flex-row items-center md:items-start gap-6 ${i18n.language === 'ar' ? 'md:flex-row-reverse' : 'md:flex-row-reverse'}`} style={i18n.language === 'ar' ? { direction: 'rtl' } : { direction: 'ltr' }}>
+              {/* For Arabic: pie chart left, breakdown right. For English: pie chart right, breakdown left */}
+              {i18n.language === 'ar' ? (
+                <>
+                  {/* Large Donut Chart */}
+                  <LargeDonutChart data={mainDonutData} size={210} />
+                  {/* Value Breakdown */}
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                        {t('employeeOverview.totalPotentialValue')}
+                      </h2>
+                      <div className="text-3xl font-bold text-gray-900">
+                        <span className="text-lg text-gray-400 font-normal">SAR</span> {totalPotentialValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-semibold text-gray-900">
-                          <span className="text-xs text-gray-400 font-normal">SAR</span> {(item.value * sharePrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-sm text-gray-600 ml-2">
-                          ({item.value.toLocaleString()} shares)
-                        </span>
+                      <div className="text-xl text-gray-600 mt-1">
+                        ({portfolioData?.totalShares.toLocaleString() || 0} {t('employeeOverview.shares')})
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+
+                    {/* Breakdown List */}
+                    <div className="space-y-2 mt-4">
+                      {mainDonutData.map((item, index) => (
+                        <div key={index} className="flex items-center justify-start">
+                          <div className="flex items-center space-x-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="text-sm text-gray-700">{item.label}:</span>
+                            <span className="text-sm font-semibold text-gray-900">
+                              <span className="text-xs text-gray-400 font-normal">SAR</span> {(item.value * sharePrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              ({item.value.toLocaleString()} shares)
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Large Donut Chart */}
+                  <LargeDonutChart data={mainDonutData} size={210} />
+                  {/* Value Breakdown */}
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                        {t('employeeOverview.totalPotentialValue')}
+                      </h2>
+                      <div className="text-3xl font-bold text-gray-900">
+                        <span className="text-lg text-gray-400 font-normal">SAR</span> {totalPotentialValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-xl text-gray-600 mt-1">
+                        ({portfolioData?.totalShares.toLocaleString() || 0} {t('employeeOverview.shares')})
+                      </div>
+                    </div>
+
+                    {/* Breakdown List */}
+                    <div className="space-y-2 mt-4">
+                      {mainDonutData.map((item, index) => (
+                        <div key={index} className="flex items-center justify-start">
+                          <div className="flex items-center space-x-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="text-sm text-gray-700">{item.label}:</span>
+                            <span className="text-sm font-semibold text-gray-900">
+                              <span className="text-xs text-gray-400 font-normal">SAR</span> {(item.value * sharePrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              ({item.value.toLocaleString()} shares)
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

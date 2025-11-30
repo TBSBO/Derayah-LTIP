@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './lib/i18n';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -59,8 +59,33 @@ const PageLoader = () => (
 );
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-  const { user, userRole, loading, isOnboardingComplete, onboardingLoaded } = useAuth();
+  const { user, userRole, loading, onboardingLoaded } = useAuth();
+  const [onboardingTimeout, setOnboardingTimeout] = useState(false);
+  const [userRoleTimeout, setUserRoleTimeout] = useState(false);
+
+  // Set timeout for onboarding loading (5 seconds max)
+  useEffect(() => {
+    if (!onboardingLoaded && userRole && userRole.user_type !== 'employee') {
+      const timeout = setTimeout(() => {
+        setOnboardingTimeout(true);
+      }, 5000);
+      return () => clearTimeout(timeout);
+    } else {
+      setOnboardingTimeout(false);
+    }
+  }, [onboardingLoaded, userRole]);
+
+  // Set timeout for userRole loading (3 seconds max)
+  useEffect(() => {
+    if (user && !userRole && !loading) {
+      const timeout = setTimeout(() => {
+        setUserRoleTimeout(true);
+      }, 3000);
+      return () => clearTimeout(timeout);
+    } else {
+      setUserRoleTimeout(false);
+    }
+  }, [user, userRole, loading]);
 
   if (loading) {
     return (
@@ -74,7 +99,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!onboardingLoaded && userRole && userRole.user_type !== 'employee') {
+  // If userRole is still loading, wait a bit (but not forever)
+  if (!userRole && !userRoleTimeout) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // If userRole timed out loading, redirect to login
+  if (!userRole && userRoleTimeout) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Show loading only if onboarding is not loaded AND timeout hasn't expired
+  if (!onboardingLoaded && !onboardingTimeout && userRole && userRole.user_type !== 'employee') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -149,6 +189,33 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+function RootRedirect() {
+  const { user, userRole, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Redirect based on user type
+  if (userRole?.user_type === 'employee') {
+    return <Navigate to="/employee/dashboard" replace />;
+  }
+
+  if (userRole?.user_type === 'super_admin') {
+    return <Navigate to="/operator/companies" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
 }
 
 function AppContent() {
@@ -460,7 +527,7 @@ function AppContent() {
           <Route path="/concept5" element={<LandingOptionFive />} />
           <Route path="/concept5-ar" element={<LandingOptionFiveAR />} />
           <Route path="/concept6" element={<LandingOptionSix />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<RootRedirect />} />
       </Routes>
     </Suspense>
   );
