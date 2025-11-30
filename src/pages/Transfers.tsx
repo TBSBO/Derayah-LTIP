@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { formatDate, formatVestingEventId } from '../lib/dateUtils';
 import { formatShares } from '../lib/numberUtils';
+import TransfersSummary from '../components/dashboard/TransfersSummary';
 import { 
   ArrowRightLeft, 
   Search, 
@@ -453,7 +454,7 @@ export default function Transfers() {
   }
 
   return (
-    <div className={`space-y-6 ${isRTL ? 'text-right' : 'text-left'}`} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div id="transfers-section" className={`space-y-6 ${isRTL ? 'text-right' : 'text-left'}`} dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between">
         <div className={isRTL ? 'text-right' : ''}>
           <h1 className={`text-3xl font-bold text-gray-900 flex items-center gap-3 ${isRTL ? 'flex-row-reverse justify-end' : ''}`}>
@@ -466,6 +467,9 @@ export default function Transfers() {
           <p className="text-gray-600 mt-1">{t('transfers.description')}</p>
         </div>
       </div>
+
+      {/* Transfer Summary */}
+      <TransfersSummary />
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">

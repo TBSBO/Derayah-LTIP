@@ -85,9 +85,9 @@ export default function Documents() {
       console.log('✅ canApproveDocuments: role is finance_admin');
       return true;
     }
-    if (userRole.role === 'hr_admin' || userRole.role === 'legal_admin' || userRole.role === 'company_admin') {
+    if (userRole.role === 'hr_admin' || userRole.role === 'operations_admin' || userRole.role === 'legal_admin' || userRole.role === 'company_admin') {
       const hasPerm = hasPermission('contract_approval');
-      console.log('🔍 canApproveDocuments: hr/legal/company admin, hasPermission:', hasPerm);
+      console.log('🔍 canApproveDocuments: hr/operations/legal/company admin, hasPermission:', hasPerm);
       return hasPerm;
     }
     

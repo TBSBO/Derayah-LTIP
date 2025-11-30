@@ -60,6 +60,8 @@ interface Plan {
   id: string;
   plan_name_en: string;
   plan_code: string;
+  plan_type?: 'LTIP_RSU' | 'LTIP_RSA' | 'ESOP';
+  exercise_price?: number | null;
   shares_available: number;
   start_date: string;
   vesting_config: any;
@@ -119,6 +121,7 @@ export default function Grants() {
     vesting_schedule_id: '',
     performance_metric_ids: [] as string[],
     use_even_distribution: false,
+    exercise_price: null as number | null,
   });
   const [editGrant, setEditGrant] = useState({
     total_shares: 0,
@@ -204,6 +207,7 @@ export default function Grants() {
       vesting_schedule_id: '',
       performance_metric_ids: [],
       use_even_distribution: false,
+      exercise_price: null,
     });
   };
 
@@ -375,7 +379,9 @@ export default function Grants() {
             .select(`
               id, 
               plan_name_en, 
-              plan_code, 
+              plan_code,
+              plan_type,
+              exercise_price,
               shares_available,
               start_date,
               vesting_config, 
@@ -661,7 +667,7 @@ export default function Grants() {
 
     if (userRole.role === 'finance_admin') return true;
 
-    if (userRole.role === 'hr_admin' || userRole.role === 'legal_admin' || userRole.role === 'company_admin') {
+    if (userRole.role === 'hr_admin' || userRole.role === 'operations_admin' || userRole.role === 'legal_admin' || userRole.role === 'company_admin') {
       return hasPermission('contract_approval');
     }
 
@@ -968,6 +974,11 @@ export default function Grants() {
       // Only include vesting_schedule_id if it has a value (to avoid errors if column doesn't exist)
       if (newGrant.vesting_schedule_id) {
         grantInsertData.vesting_schedule_id = newGrant.vesting_schedule_id;
+      }
+
+      // Include exercise_price for ESOP plans if provided
+      if (selectedPlan && selectedPlan.plan_type === 'ESOP' && newGrant.exercise_price !== null && newGrant.exercise_price !== undefined) {
+        grantInsertData.exercise_price = newGrant.exercise_price;
       }
 
       console.log('📝 Grant data to insert:', grantInsertData);
@@ -1902,6 +1913,41 @@ export default function Grants() {
                   </p>
                 )}
               </div>
+
+              {(() => {
+                const selectedPlan = plans.find((p) => p.id === newGrant.plan_id);
+                if (selectedPlan && selectedPlan.plan_type === 'ESOP') {
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Exercise Price (Strike Price) {selectedPlan.plan_type === 'ESOP' ? '*' : ''}
+                        <span className="text-gray-500 text-xs ml-1 font-normal">
+                          (SAR per share - required for ESOP grants)
+                        </span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newGrant.exercise_price ?? ''}
+                        onChange={(e) => setNewGrant({ 
+                          ...newGrant, 
+                          exercise_price: e.target.value ? parseFloat(e.target.value) : null 
+                        })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder={selectedPlan.exercise_price ? `Plan default: ${selectedPlan.exercise_price}` : "Enter exercise price"}
+                        required={selectedPlan.plan_type === 'ESOP'}
+                      />
+                      {selectedPlan.exercise_price && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Plan default: {selectedPlan.exercise_price} SAR. Leave empty to use plan default.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <label className="flex items-center space-x-3 cursor-pointer">

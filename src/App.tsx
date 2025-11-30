@@ -18,13 +18,18 @@ const CapTable = lazy(() => import('./pages/CapTable'));
 const LTIPPools = lazy(() => import('./pages/LTIPPools'));
 const VestingSchedules = lazy(() => import('./pages/VestingSchedules'));
 const VestingEvents = lazy(() => import('./pages/VestingEvents'));
+const ExerciseOrders = lazy(() => import('./pages/ExerciseOrders'));
+const CompanyCashPortfolio = lazy(() => import('./pages/CompanyCashPortfolio'));
+const CashTransfers = lazy(() => import('./pages/CashTransfers'));
 const Transfers = lazy(() => import('./pages/Transfers'));
 const PerformanceMetrics = lazy(() => import('./pages/PerformanceMetrics'));
 const Documents = lazy(() => import('./pages/Documents'));
 const UsersPage = lazy(() => import('./pages/Users'));
 const EmployeeLogin = lazy(() => import('./pages/EmployeeLogin'));
+const EmployeeOverview = lazy(() => import('./pages/EmployeeOverview'));
 const EmployeeDashboard = lazy(() => import('./pages/EmployeeDashboard'));
 const EmployeeVesting = lazy(() => import('./pages/EmployeeVesting'));
+const EmployeeVestingEvents = lazy(() => import('./pages/EmployeeVestingEvents'));
 const EmployeePerformance = lazy(() => import('./pages/EmployeePerformance'));
 const EmployeePortfolio = lazy(() => import('./pages/EmployeePortfolio'));
 const EmployeeTaxCalculator = lazy(() => import('./pages/EmployeeTaxCalculator'));
@@ -272,6 +277,30 @@ function AppContent() {
             }
           />
           <Route
+            path="/dashboard/exercise-orders"
+            element={
+              <ProtectedRoute>
+                <ExerciseOrders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/company-cash-portfolio"
+            element={
+              <ProtectedRoute>
+                <CompanyCashPortfolio />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/cash-transfers"
+            element={
+              <ProtectedRoute>
+                <CashTransfers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboard/transfers"
             element={
               <ProtectedRoute>
@@ -345,6 +374,14 @@ function AppContent() {
           />
           <Route path="/employee/login" element={<EmployeeLogin />} />
           <Route
+            path="/employee/overview"
+            element={
+              <EmployeeProtectedRoute>
+                <EmployeeOverview />
+              </EmployeeProtectedRoute>
+            }
+          />
+          <Route
             path="/employee/dashboard"
             element={
               <EmployeeProtectedRoute>
@@ -357,6 +394,14 @@ function AppContent() {
             element={
               <EmployeeProtectedRoute>
                 <EmployeeVesting />
+              </EmployeeProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/vesting-events"
+            element={
+              <EmployeeProtectedRoute>
+                <EmployeeVestingEvents />
               </EmployeeProtectedRoute>
             }
           />

@@ -29,6 +29,8 @@ import {
   CreditCard,
   Briefcase,
   Map,
+  ShoppingCart,
+  DollarSign,
 } from 'lucide-react';
 
 type PermissionKey =
@@ -45,7 +47,8 @@ type PermissionKey =
   | 'documents'
   | 'cap_table'
   | 'portfolio'
-  | 'settings';
+  | 'settings'
+  | 'approve_cash_transfers';
 
 interface NavigationItem {
   name: string;
@@ -297,7 +300,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         userRole.user_type === 'super_admin' ||
         userRole.role === 'super_admin' ||
         userRole.role === 'finance_admin' ||
-        ((userRole.role === 'hr_admin' || userRole.role === 'legal_admin' || userRole.role === 'company_admin') && hasPermission('contract_approval'));
+        ((userRole.role === 'hr_admin' || userRole.role === 'operations_admin' || userRole.role === 'legal_admin' || userRole.role === 'company_admin') && hasPermission('contract_approval'));
 
       if (!canApprove) {
         setDraftContractsCount(0);
@@ -393,6 +396,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       { name: t('common.incentivePlans'), href: '/dashboard/plans', icon: FileText, permission: 'plans' },
       { name: t('common.vestingSchedules'), href: '/dashboard/vesting-schedules', icon: Calendar, permission: 'vesting_schedules' },
       { name: t('common.vestingEvents'), href: '/dashboard/vesting-events', icon: Clock, permission: 'vesting_events' },
+      { name: t('common.exerciseOrders'), href: '/dashboard/exercise-orders', icon: ShoppingCart, permission: 'vesting_events' },
+      { name: t('common.companyCashPortfolio'), href: '/dashboard/company-cash-portfolio', icon: DollarSign, permission: 'portfolio' },
+      { name: t('common.cashTransfers'), href: '/dashboard/cash-transfers', icon: ArrowRightLeft, permission: 'portfolio' },
       { name: t('common.transfers'), href: '/dashboard/transfers', icon: ArrowRightLeft, permission: 'transfers' },
       { name: t('common.performanceMetrics'), href: '/dashboard/performance-metrics', icon: Target, permission: 'performance_metrics' },
       { name: t('common.grants'), href: '/dashboard/grants', icon: Award, permission: 'grants' },
@@ -470,6 +476,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       '/dashboard/plans': 'plans',
       '/dashboard/vesting-schedules': 'vesting_schedules',
       '/dashboard/vesting-events': 'vesting_events',
+      '/dashboard/exercise-orders': 'vesting_events',
+      '/dashboard/company-cash-portfolio': 'portfolio',
+      '/dashboard/cash-transfers': 'portfolio',
       '/dashboard/transfers': 'transfers',
       '/dashboard/performance-metrics': 'performance_metrics',
       '/dashboard/grants': 'grants',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { Users, MoreVertical, X } from 'lucide-react';
@@ -11,6 +11,7 @@ type AdminRole =
   | 'finance_admin'
   | 'legal_admin'
   | 'hr_admin'
+  | 'operations_admin'
   | 'viewer';
 
 const ADMIN_ROLES: AdminRole[] = [
@@ -19,8 +20,14 @@ const ADMIN_ROLES: AdminRole[] = [
   'finance_admin',
   'legal_admin',
   'hr_admin',
+  'operations_admin',
   'viewer',
 ] as const;
+
+// Filtered roles for company users (excludes super_admin)
+const COMPANY_ADMIN_ROLES: AdminRole[] = ADMIN_ROLES.filter(
+  (role) => role !== 'super_admin'
+);
 
 const MODULES = [
   { key: 'dashboard', label: 'Overview' },
@@ -102,41 +109,43 @@ export default function UsersPage() {
   );
   const {
     user,
-    getCurrentCompanyId,
+    activeCompanyId,
     userRole,
     loading: authLoading,
     onboardingLoaded,
   } = useAuth();
-  const currentCompanyId = getCurrentCompanyId();
+  
+  // Use activeCompanyId directly and memoize to prevent unnecessary recalculations
+  const currentCompanyId = useMemo(() => {
+    return activeCompanyId || (userRole?.company_id ?? null);
+  }, [activeCompanyId, userRole?.company_id]);
+  
   const isSuperAdminUser = useMemo(() => userRole?.user_type === 'super_admin', [userRole]);
+  
+  // Add refs to prevent concurrent loads and track last loaded company
+  const isLoadingRef = useRef(false);
+  const lastLoadedCompanyIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!currentCompanyId) {
-      if (authLoading || !onboardingLoaded) {
-        setLoading(true);
-        setError(null);
-        return;
-      }
-
-      setCompanyId(null);
-      setUsersList([]);
-      if (isSuperAdminUser) {
-        setError('Select a company to manage administrators.');
-      } else {
-        setError('No company associated with the current user.');
-      }
-      setLoading(false);
+  // Memoize loadUsers to prevent unnecessary re-creations and infinite loops
+  const loadUsers = useCallback(async (targetCompanyId: string) => {
+    // Prevent concurrent loads
+    if (isLoadingRef.current) {
+      console.log('⏸️ Users already loading, skipping...');
       return;
     }
 
-    loadUsers(currentCompanyId);
-  }, [currentCompanyId, isSuperAdminUser, authLoading, onboardingLoaded]);
+    // Skip if we already loaded data for this company
+    if (targetCompanyId === lastLoadedCompanyIdRef.current) {
+      console.log('⏸️ Users already loaded for this company, skipping...');
+      return;
+    }
 
-  const loadUsers = async (targetCompanyId: string) => {
     try {
+      isLoadingRef.current = true;
       setLoading(true);
       setError(null);
       setCompanyId(targetCompanyId);
+      lastLoadedCompanyIdRef.current = targetCompanyId;
 
       const { data: companyUsersData, error: usersError } = await supabase
         .from('company_users')
@@ -204,8 +213,38 @@ export default function UsersPage() {
       setError('Failed to load users.');
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
-  };
+  }, []); // Empty dependency array - function is stable and uses refs for state tracking
+
+  useEffect(() => {
+    // Wait for auth to finish loading before proceeding
+    if (authLoading || !onboardingLoaded) {
+      setLoading(true);
+      setError(null);
+      return;
+    }
+
+    if (!currentCompanyId) {
+      setCompanyId(null);
+      setUsersList([]);
+      if (isSuperAdminUser) {
+        setError('Select a company to manage administrators.');
+      } else {
+        setError('No company associated with the current user.');
+      }
+      setLoading(false);
+      return;
+    }
+
+    loadUsers(currentCompanyId);
+  }, [currentCompanyId, isSuperAdminUser, authLoading, onboardingLoaded, loadUsers]);
+
+  // Reset refs when user changes to allow reloading for new user
+  useEffect(() => {
+    lastLoadedCompanyIdRef.current = null;
+    isLoadingRef.current = false;
+  }, [userRole?.user_id]);
 
   const renderPermissions = (permissions: PermissionsState) => {
     const enabledModules = MODULES.filter((module) => permissions[module.key]);
@@ -279,7 +318,11 @@ export default function UsersPage() {
       }
 
       handleCloseEditModal();
-      await loadUsers(companyId);
+      if (companyId) {
+        await loadUsers(companyId);
+      } else if (currentCompanyId) {
+        await loadUsers(currentCompanyId);
+      }
     } catch (err: any) {
       console.error('Error updating user:', err);
       setEditError(`Failed to save changes: ${err?.message || 'Unknown error occurred'}`);
@@ -579,7 +622,7 @@ export default function UsersPage() {
                   onChange={(e) => setEditRole(e.target.value as AdminRole)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  {ADMIN_ROLES.map((roleOption) => (
+                  {COMPANY_ADMIN_ROLES.map((roleOption) => (
                     <option key={roleOption} value={roleOption}>
                       {formatRoleLabel(roleOption)}
                     </option>
@@ -751,7 +794,7 @@ export default function UsersPage() {
                   onChange={(e) => setAddRole(e.target.value as AdminRole)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  {ADMIN_ROLES.map((roleOption) => (
+                  {COMPANY_ADMIN_ROLES.map((roleOption) => (
                     <option key={roleOption} value={roleOption}>
                       {formatRoleLabel(roleOption)}
                     </option>

@@ -73,7 +73,7 @@ export interface Database {
           id: string
           company_id: string
           user_id: string
-          role: 'super_admin' | 'hr_admin' | 'finance_admin' | 'legal_admin' | 'viewer'
+          role: 'super_admin' | 'hr_admin' | 'finance_admin' | 'legal_admin' | 'operations_admin' | 'viewer'
           permissions: Json
           is_active: boolean
           display_name_en: string | null
@@ -85,7 +85,7 @@ export interface Database {
           id?: string
           company_id: string
           user_id: string
-          role: 'super_admin' | 'hr_admin' | 'finance_admin' | 'legal_admin' | 'viewer'
+          role: 'super_admin' | 'hr_admin' | 'finance_admin' | 'legal_admin' | 'operations_admin' | 'viewer'
           permissions?: Json
           is_active?: boolean
           display_name_en?: string | null
@@ -97,7 +97,7 @@ export interface Database {
           id?: string
           company_id?: string
           user_id?: string
-          role?: 'super_admin' | 'hr_admin' | 'finance_admin' | 'legal_admin' | 'viewer'
+          role?: 'super_admin' | 'hr_admin' | 'finance_admin' | 'legal_admin' | 'operations_admin' | 'viewer'
           permissions?: Json
           is_active?: boolean
           display_name_en?: string | null
@@ -410,9 +410,58 @@ export interface Database {
           employee_acceptance_at: string | null
           status: 'pending_signature' | 'active' | 'completed' | 'forfeited' | 'cancelled'
           cancellation_reason: string | null
+          exercise_price: number | null
           created_by: string | null
           created_at: string
           updated_at: string
+        }
+        Insert: {
+          id?: string
+          grant_number?: string
+          company_id: string
+          plan_id: string
+          employee_id: string
+          grant_date?: string
+          total_shares: number
+          vested_shares?: number
+          exercised_shares?: number
+          forfeited_shares?: number
+          remaining_unvested_shares?: number | null
+          vesting_start_date: string
+          vesting_end_date: string
+          contract_document_url?: string | null
+          contract_signed_at?: string | null
+          employee_acceptance_at?: string | null
+          status?: 'pending_signature' | 'active' | 'completed' | 'forfeited' | 'cancelled'
+          cancellation_reason?: string | null
+          exercise_price?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          grant_number?: string
+          company_id?: string
+          plan_id?: string
+          employee_id?: string
+          grant_date?: string
+          total_shares?: number
+          vested_shares?: number
+          exercised_shares?: number
+          forfeited_shares?: number
+          remaining_unvested_shares?: number | null
+          vesting_start_date?: string
+          vesting_end_date?: string
+          contract_document_url?: string | null
+          contract_signed_at?: string | null
+          employee_acceptance_at?: string | null
+          status?: 'pending_signature' | 'active' | 'completed' | 'forfeited' | 'cancelled'
+          cancellation_reason?: string | null
+          exercise_price?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
         }
       }
       market_data: {

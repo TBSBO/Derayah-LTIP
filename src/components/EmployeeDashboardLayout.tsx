@@ -15,6 +15,7 @@ import {
   X,
   ArrowRightLeft,
   Briefcase,
+  Calendar,
 } from 'lucide-react';
 
 interface EmployeeDashboardLayoutProps {
@@ -89,8 +90,10 @@ export default function EmployeeDashboardLayout({ children }: EmployeeDashboardL
   };
 
   const navigation = [
+    { name: t('employee.overview'), key: 'overview', href: '/employee/overview', icon: TrendingUp },
     { name: t('employee.dashboard'), key: 'dashboard', href: '/employee/dashboard', icon: TrendingUp },
     { name: t('employee.vestingTimeline'), key: 'vestingTimeline', href: '/employee/vesting', icon: Award },
+    { name: t('employee.vestingEvents'), key: 'vestingEvents', href: '/employee/vesting-events', icon: Calendar },
     { name: t('employee.portfolio'), key: 'portfolio', href: '/employee/portfolio', icon: Briefcase },
     { name: t('employee.performance'), key: 'performance', href: '/employee/performance', icon: TrendingUp },
     { name: t('employee.taxCalculator'), key: 'taxCalculator', href: '/employee/tax-calculator', icon: Calculator },

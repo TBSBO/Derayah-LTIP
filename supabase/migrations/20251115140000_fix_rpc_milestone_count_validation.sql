@@ -346,19 +346,29 @@ BEGIN
     END IF;
   END IF;
 
-  -- Set exercise price for ESOP plans (only if column exists)
+  -- Set exercise price for ESOP plans
+  -- Priority: grant-level exercise_price > plan-level exercise_price > default 1.0
   IF v_plan.plan_type = 'ESOP' THEN
     IF v_has_exercise_price_col THEN
       BEGIN
         EXECUTE format('SELECT exercise_price FROM grants WHERE id = $1')
         USING p_grant_id
         INTO v_exercise_price;
+        
+        -- If grant doesn't have exercise_price set, fallback to plan's exercise_price
+        IF v_exercise_price IS NULL THEN
+          v_exercise_price := v_plan.exercise_price;
+        END IF;
+        
+        -- Final fallback to 1.0 if neither grant nor plan has it
         v_exercise_price := COALESCE(v_exercise_price, 1.0);
       EXCEPTION WHEN OTHERS THEN
-        v_exercise_price := 1.0;
+        -- On error, try plan's exercise_price, then default to 1.0
+        v_exercise_price := COALESCE(v_plan.exercise_price, 1.0);
       END;
     ELSE
-      v_exercise_price := 1.0;
+      -- Column doesn't exist yet, use plan's exercise_price or default
+      v_exercise_price := COALESCE(v_plan.exercise_price, 1.0);
     END IF;
   ELSE
     v_exercise_price := NULL;
