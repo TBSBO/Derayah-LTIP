@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { TrendingUp, DollarSign, Users, PieChart, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { formatCompactNumber } from '../../lib/numberUtils';
 
 interface LTIPPool {
   id: string;
@@ -220,7 +221,7 @@ export default function LTIPPoolsSummary() {
           onToggle={() => setPoolsExpanded((prev) => !prev)}
           slices={poolSlices}
           totalLabel={t('dashboard.shares')}
-          totalValue={totalAllocated.toLocaleString()}
+          totalValue={formatCompactNumber(totalAllocated)}
           highlightKey={highlightedPoolId}
           lockedKey={poolHighlightLocked}
           hoveredSlice={hoveredPoolSlice}
@@ -237,7 +238,7 @@ export default function LTIPPoolsSummary() {
           onToggle={() => setStatusExpanded((prev) => !prev)}
           slices={statusSlices}
           totalLabel={t('dashboard.shares')}
-          totalValue={(totalUsed + totalAvailable).toLocaleString()}
+          totalValue={formatCompactNumber(totalUsed + totalAvailable)}
           highlightKey={highlightedStatus}
           lockedKey={statusHighlightLocked}
           hoveredSlice={hoveredStatusSlice}
@@ -254,7 +255,7 @@ export default function LTIPPoolsSummary() {
           onToggle={() => setUsedExpanded((prev) => !prev)}
           slices={usedBreakdownSlices}
           totalLabel={`${t('dashboard.shares')} (${t('dashboard.usedLabel')})`}
-          totalValue={totalUsed.toLocaleString()}
+          totalValue={formatCompactNumber(totalUsed)}
           highlightKey={highlightedUsedStatus}
           lockedKey={usedHighlightLocked}
           hoveredSlice={hoveredUsedSlice}

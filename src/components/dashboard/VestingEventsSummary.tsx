@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { getVestingEventStats, updateVestingEventStatuses, type VestingEventWithDetails } from '../../lib/vestingEventsService';
+import { formatCompactNumber } from '../../lib/numberUtils';
 import { Calendar, AlertCircle, Clock, TrendingUp, PieChart, ChevronDown, ChevronUp, Award } from 'lucide-react';
 import { formatDate, formatDaysRemaining, formatVestingEventId } from '../../lib/dateUtils';
 
@@ -219,7 +220,7 @@ export default function VestingEventsSummary() {
           title={t('vestingEvents.eventsByStatus')}
           iconColor="text-blue-600"
           slices={eventsSlices}
-          totalValue={`${stats.total_events.toLocaleString()}`}
+          totalValue={formatCompactNumber(stats.total_events)}
           totalLabel={t('vestingEvents.events')}
           expanded={eventsExpanded}
           onToggle={() => setEventsExpanded((prev) => !prev)}
@@ -236,7 +237,7 @@ export default function VestingEventsSummary() {
           title={t('vestingEvents.sharesByStatus')}
           iconColor="text-green-600"
           slices={sharesSlices}
-          totalValue={`${stats.total_total_shares.toLocaleString()}`}
+          totalValue={formatCompactNumber(stats.total_total_shares)}
           totalLabel={t('dashboard.shares')}
           expanded={sharesExpanded}
           onToggle={() => setSharesExpanded((prev) => !prev)}

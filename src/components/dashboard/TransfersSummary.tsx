@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { formatDate } from '../../lib/dateUtils';
-import { formatShares } from '../../lib/numberUtils';
+import { formatShares, formatCompactNumber } from '../../lib/numberUtils';
 import { 
   ArrowRightLeft, 
   Clock, 
@@ -284,7 +284,7 @@ export default function TransfersSummary() {
           title={t('transfers.transfersByStatus')}
           iconColor="text-blue-600"
           slices={statusSlices}
-          totalValue={`${stats.total_transfers.toLocaleString()}`}
+          totalValue={formatCompactNumber(stats.total_transfers)}
           totalLabel={t('transfers.transfers')}
           expanded={statusExpanded}
           onToggle={() => setStatusExpanded((prev) => !prev)}
@@ -301,7 +301,7 @@ export default function TransfersSummary() {
           title={t('transfers.transfersByType')}
           iconColor="text-green-600"
           slices={typeSlices}
-          totalValue={`${stats.total_transfers.toLocaleString()}`}
+          totalValue={formatCompactNumber(stats.total_transfers)}
           totalLabel={t('transfers.transfers')}
           expanded={typeExpanded}
           onToggle={() => setTypeExpanded((prev) => !prev)}

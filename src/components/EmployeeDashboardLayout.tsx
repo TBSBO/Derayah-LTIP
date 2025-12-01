@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import LanguageSwitcher from './LanguageSwitcher';
+import { supabase } from '../lib/supabase';
 import {
   Award,
   TrendingUp,
@@ -37,6 +38,9 @@ export default function EmployeeDashboardLayout({ children }: EmployeeDashboardL
     }
     return false;
   });
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [companyLogoScale, setCompanyLogoScale] = useState<number>(1);
 
   // Helper function to check if we're on mobile
   const isMobile = () => {
@@ -77,6 +81,56 @@ export default function EmployeeDashboardLayout({ children }: EmployeeDashboardL
     }
   }, []);
 
+  useEffect(() => {
+    const loadCompanyBranding = async () => {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData?.user) {
+          return;
+        }
+
+        const { data: employee, error: employeeError } = await supabase
+          .from('employees')
+          .select('company_id')
+          .eq('user_id', authData.user.id)
+          .maybeSingle();
+
+        if (employeeError || !employee || !(employee as any).company_id) {
+          return;
+        }
+
+        const { data: company, error: companyError } = await supabase
+          .from('companies')
+          .select('company_name_en, company_name_ar, logo_url, logo_scale')
+          .eq('id', (employee as any).company_id)
+          .maybeSingle();
+
+        if (companyError) {
+          console.error('Error loading employee company branding:', companyError);
+          return;
+        }
+
+        const typedCompany = company as any;
+
+        setCompanyLogoUrl(typedCompany?.logo_url ?? null);
+        setCompanyLogoScale(
+          typeof typedCompany?.logo_scale === 'number' && !Number.isNaN(typedCompany.logo_scale)
+            ? (typedCompany.logo_scale as number)
+            : 1
+        );
+        setCompanyName(
+          (typedCompany?.company_name_en as string) ||
+            (typedCompany?.company_name_ar as string) ||
+            null
+        );
+      } catch (error) {
+        console.error('Error loading employee company branding:', error);
+      }
+    };
+
+    loadCompanyBranding();
+  }, []);
+
   // Close sidebar on mobile when route changes
   useEffect(() => {
     if (isMobile()) {
@@ -110,13 +164,41 @@ export default function EmployeeDashboardLayout({ children }: EmployeeDashboardL
         <div className="flex flex-col h-full">
           <div className={`flex items-center justify-between p-6 border-b border-gray-200 ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div className={`flex items-center ${isRTL ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
-              <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2 rounded-lg">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">LTIP-CONNECT</h2>
-                <p className="text-xs text-gray-500">{t('employee.employeePortal')}</p>
-              </div>
+              {companyLogoUrl ? (
+                <>
+                  <div className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 bg-white flex items-center justify-center">
+                    <img
+                      src={companyLogoUrl}
+                      alt={companyName || 'Company logo'}
+                      className="max-w-full max-h-full object-contain"
+                      style={{
+                        transform: `scale(${companyLogoScale || 1})`,
+                        transformOrigin: 'center center',
+                      }}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900 truncate max-w-[180px]">
+                      {companyName || t('employee.employeePortal')}
+                    </h2>
+                    <p className="text-xs text-gray-500">{t('employee.employeePortal')}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-2 rounded-lg">
+                    <Award className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900">LTIP-CONNECT</h2>
+                    <p className="text-xs text-gray-500">{t('employee.employeePortal')}</p>
+                  </div>
+                </>
+              )}
             </div>
             <button
               onClick={() => setSidebarOpen(false)}

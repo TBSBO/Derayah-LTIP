@@ -5,6 +5,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useCompanyColor } from '../hooks/useCompanyColor';
+import { usePlatformLogo } from '../hooks/usePlatformLogo';
 import {
   Building2,
   LayoutDashboard,
@@ -31,6 +32,7 @@ import {
   Map,
   ShoppingCart,
   DollarSign,
+  Globe,
 } from 'lucide-react';
 
 type PermissionKey =
@@ -97,6 +99,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [companyOptions, setCompanyOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const { brandColor, getBgColor, getColorWithOpacity } = useCompanyColor();
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [companyLogoScale, setCompanyLogoScale] = useState<number>(1);
+  const [companyDisplayName, setCompanyDisplayName] = useState<string | null>(null);
+  const { logoUrl: platformLogoUrl, logoScale: platformLogoScale, platformNameEn, platformNameAr } = usePlatformLogo();
 
   const isSuperAdminUser = useMemo(() => {
     // Explicitly check: only show operator navigation if user_type is 'super_admin'
@@ -243,6 +249,50 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     loadPermissions();
   }, [user, userRole?.user_type, activeCompanyId, isSuperAdminUser, setActiveCompany]);
+
+  useEffect(() => {
+    const loadCompanyBranding = async () => {
+      try {
+        const companyId = getCurrentCompanyId();
+        if (!companyId) {
+          setCompanyLogoUrl(null);
+          setCompanyDisplayName(null);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('companies')
+          .select('company_name_en, company_name_ar, logo_url, logo_scale')
+          .eq('id', companyId)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error loading company branding:', error);
+          setCompanyLogoUrl(null);
+          setCompanyDisplayName(null);
+          return;
+        }
+
+        setCompanyLogoUrl(data?.logo_url ?? null);
+        setCompanyLogoScale(
+          typeof data?.logo_scale === 'number' && !Number.isNaN(data.logo_scale)
+            ? (data.logo_scale as number)
+            : 1
+        );
+        setCompanyDisplayName(
+          (data?.company_name_en as string) ||
+            (data?.company_name_ar as string) ||
+            null
+        );
+      } catch (error) {
+        console.error('Error loading company branding:', error);
+        setCompanyLogoUrl(null);
+        setCompanyDisplayName(null);
+      }
+    };
+
+    loadCompanyBranding();
+  }, [getCurrentCompanyId, activeCompanyId]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -445,6 +495,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               icon: Languages,
               permission: null,
             },
+            {
+              name: 'Platform Settings',
+              href: '/operator/platform-settings',
+              icon: Globe,
+              permission: null,
+            },
           ]
         : [],
     [isSuperAdminUser, t]
@@ -507,16 +563,83 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className={`fixed inset-y-0 ${isRTL ? 'right-0 border-l' : 'left-0 border-r'} z-50 w-64 bg-white border-gray-200 transform transition-transform duration-200 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : isRTL ? 'translate-x-full' : '-translate-x-full'
       } lg:translate-x-0`}>
-        <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full">
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-lg" style={{ backgroundColor: brandColor }}>
-                <Building2 className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">LTIP-CONNECT</h2>
-                <p className="text-xs text-gray-500">Admin Portal</p>
-              </div>
+              {isSuperAdminUser ? (
+                // Super admin: show platform logo
+                platformLogoUrl ? (
+                  <>
+                    <div className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 bg-white flex items-center justify-center">
+                      <img
+                        src={platformLogoUrl}
+                        alt={platformNameEn || platformNameAr || 'Platform logo'}
+                        className="max-w-full max-h-full object-contain"
+                        style={{
+                          transform: `scale(${platformLogoScale || 1})`,
+                          transformOrigin: 'center center',
+                        }}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-gray-900 truncate max-w-[170px]">
+                        {platformNameEn || platformNameAr || 'Platform'}
+                      </h2>
+                      <p className="text-xs text-gray-500">Super Admin Portal</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: brandColor }}>
+                      <Building2 className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-gray-900">LTIP-CONNECT</h2>
+                      <p className="text-xs text-gray-500">Super Admin Portal</p>
+                    </div>
+                  </>
+                )
+              ) : companyLogoUrl ? (
+                // Company admin: show company logo
+                <>
+                  <div className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200 bg-white flex items-center justify-center">
+                    <img
+                      src={companyLogoUrl}
+                      alt={companyDisplayName || 'Company logo'}
+                      className="max-w-full max-h-full object-contain"
+                      style={{
+                        transform: `scale(${companyLogoScale || 1})`,
+                        transformOrigin: 'center center',
+                      }}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900 truncate max-w-[170px]">
+                      {companyDisplayName || 'Company Portal'}
+                    </h2>
+                    <p className="text-xs text-gray-500">Admin Portal</p>
+                  </div>
+                </>
+              ) : (
+                // Fallback: show icon logo when no logo is available
+                <>
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: brandColor }}>
+                    <Building2 className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900">LTIP-CONNECT</h2>
+                    <p className="text-xs text-gray-500">Admin Portal</p>
+                  </div>
+                </>
+              )}
             </div>
             <button
               onClick={() => setSidebarOpen(false)}

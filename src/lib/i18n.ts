@@ -212,6 +212,8 @@ const defaultTranslations = {
       'employeeOverview.details': 'Details',
       'employeeOverview.noGrantsAvailable': 'No grants available',
       'employeeOverview.totalShares': 'Total Shares',
+      'employeeOverview.portfolioOverview': 'Portfolio Overview',
+      'employeeOverview.portfolioOverviewDescription': 'View your equity portfolio and track your vesting progress',
       // Employee Vesting Events
       'employeeVestingEvents.title': 'Vesting Events',
       'employeeVestingEvents.description': 'View and manage your vesting events',
@@ -478,6 +480,8 @@ const defaultTranslations = {
       'employeeOverview.details': 'التفاصيل',
       'employeeOverview.noGrantsAvailable': 'لا توجد منح متاحة',
       'employeeOverview.totalShares': 'إجمالي الأسهم',
+      'employeeOverview.portfolioOverview': 'نظرة عامة على المحفظة',
+      'employeeOverview.portfolioOverviewDescription': 'عرض محفظة حقوق الملكية الخاصة بك وتتبع تقدم الاستحقاق',
       // Employee Vesting Events
       'employeeVestingEvents.title': 'أحداث الاستحقاق',
       'employeeVestingEvents.description': 'عرض وإدارة أحداث الاستحقاق الخاصة بك',

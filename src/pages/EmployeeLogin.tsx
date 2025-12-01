@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Building2, Mail, Lock, AlertCircle, Award } from 'lucide-react';
+import { usePlatformLogo } from '../hooks/usePlatformLogo';
 
 export default function EmployeeLogin() {
   const location = useLocation();
@@ -129,17 +130,39 @@ export default function EmployeeLogin() {
     }
   };
 
+  const { logoUrl, logoScale, platformNameEn, loading: logoLoading } = usePlatformLogo();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center">
-              <Building2 className="w-8 h-8 text-white" />
-            </div>
+            {logoUrl && !logoLoading ? (
+              <div className="w-72 h-48 flex items-center justify-center overflow-hidden bg-white rounded-2xl">
+                <img 
+                  src={logoUrl} 
+                  alt={platformNameEn || "Platform Logo"} 
+                  className="w-full h-full object-contain"
+                  style={{
+                    transform: `scale(${logoScale})`,
+                    transformOrigin: 'center',
+                  }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="w-72 h-48 bg-blue-600 rounded-2xl flex items-center justify-center">
+                <Building2 className="w-24 h-24 text-white" />
+              </div>
+            )}
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Employee Portal</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {platformNameEn ? `${platformNameEn} - Employee Portal` : 'Employee Portal'}
+          </h1>
           <p className="text-gray-600">Access your equity dashboard and documents</p>
         </div>
 

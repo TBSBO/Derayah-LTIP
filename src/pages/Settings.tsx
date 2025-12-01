@@ -23,6 +23,8 @@ interface CompanySettings {
   fmv_source: 'manual' | 'tadawul' | null;
   last_price_fetch?: string | null;
   brand_color?: string;
+  logo_url?: string | null;
+  logo_scale?: number | null;
 }
 
 export default function Settings() {
@@ -34,6 +36,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [fetchingPrice, setFetchingPrice] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   
   // Tadawul company selector state
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
@@ -76,6 +79,11 @@ export default function Settings() {
           fmv_source: (company.fmv_source as CompanySettings['fmv_source']) ?? 'tadawul',
           last_price_fetch: company.last_price_fetch || null,
           brand_color: company.brand_color || '#2563EB',
+          logo_url: company.logo_url || null,
+          logo_scale:
+            typeof company.logo_scale === 'number' && !Number.isNaN(company.logo_scale)
+              ? company.logo_scale
+              : 1,
         });
         
         setSelectedMarket(market);
@@ -187,6 +195,97 @@ export default function Settings() {
     }
   };
 
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!settings) return;
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Basic client-side validation
+    const maxSizeMb = 2;
+    if (file.size > maxSizeMb * 1024 * 1024) {
+      setMessage({
+        type: 'error',
+        text: `Logo is too large. Please upload an image smaller than ${maxSizeMb}MB.`,
+      });
+      event.target.value = '';
+      return;
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setMessage({
+        type: 'error',
+        text: 'Invalid file type. Please upload a PNG, JPG, SVG, or WEBP image.',
+      });
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setUploadingLogo(true);
+      setMessage(null);
+
+      const path = `logos/${settings.id}/${Date.now()}-${file.name}`;
+
+      // Note: make sure you have a public bucket called "company-assets" in Supabase
+      const { error: uploadError } = await supabase.storage
+        .from('company-assets')
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        console.error('Error uploading logo:', uploadError);
+        throw uploadError;
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('company-assets').getPublicUrl(path);
+
+      setSettings((prev) =>
+        prev
+          ? {
+              ...prev,
+              logo_url: publicUrl,
+              // Reset to default scale when a new logo is uploaded
+              logo_scale: prev.logo_scale && !Number.isNaN(prev.logo_scale) ? prev.logo_scale : 1,
+            }
+          : prev
+      );
+
+      // Persist immediately so it is available across sessions
+      const { error: updateError } = await supabase
+        .from('companies')
+        .update({
+          logo_url: publicUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', settings.id);
+
+      if (updateError) {
+        console.error('Error saving logo URL:', updateError);
+        throw updateError;
+      }
+
+      setMessage({
+        type: 'success',
+        text: 'Company logo updated successfully.',
+      });
+    } catch (error: any) {
+      console.error('Error handling logo upload:', error);
+      setMessage({
+        type: 'error',
+        text: error?.message || 'Failed to upload logo. Please try again.',
+      });
+    } finally {
+      setUploadingLogo(false);
+      // Reset file input so the same file can be re-selected if needed
+      event.target.value = '';
+    }
+  };
+
   const handleSave = async () => {
     if (!settings) return;
 
@@ -226,6 +325,11 @@ export default function Settings() {
           current_fmv: sharePrice,
           fmv_source: useManual ? 'manual' : (sharePrice ? 'tadawul' : null),
           brand_color: validColor,
+          logo_url: settings.logo_url || null,
+          logo_scale:
+            settings.logo_scale !== null && settings.logo_scale !== undefined
+              ? settings.logo_scale
+              : 1,
           updated_at: new Date().toISOString(),
         })
         .eq('id', settings.id);
@@ -371,6 +475,76 @@ export default function Settings() {
                 }
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+
+            {/* Company Logo */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Company Logo
+              </label>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-lg border border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden">
+                    {settings.logo_url ? (
+                      <img
+                        src={settings.logo_url}
+                        alt="Company logo"
+                        className="max-w-full max-h-full object-contain"
+                        style={{
+                          transform: `scale(${settings.logo_scale || 1})`,
+                          transformOrigin: 'center center',
+                        }}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <span className="text-xs text-gray-400 text-center px-2">
+                        No logo
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      id="company-logo"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      disabled={uploadingLogo}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      PNG, JPG, SVG, or WEBP. Recommended minimum height 48px. Max {2}MB.
+                    </p>
+                    {settings.logo_url && (
+                      <div className="mt-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Logo Size (crop)
+                        </label>
+                        <input
+                          type="range"
+                          min={0.6}
+                          max={1.6}
+                          step={0.05}
+                          value={settings.logo_scale ?? 1}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              logo_scale: Number(e.target.value),
+                            })
+                          }
+                          className="w-full"
+                        />
+                        <p className="mt-1 text-[11px] text-gray-500">
+                          Use the slider to zoom the logo inside the frame so it is clipped exactly how you
+                          want it to appear in the portals.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>

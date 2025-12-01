@@ -42,6 +42,7 @@ const OperatorSubscriptions = lazy(() => import('./pages/OperatorSubscriptions')
 const OperatorBuybackRequests = lazy(() => import('./pages/OperatorBuybackRequests'));
 const OperatorPortfolios = lazy(() => import('./pages/OperatorPortfolios'));
 const Translations = lazy(() => import('./pages/Translations'));
+const PlatformSettings = lazy(() => import('./pages/PlatformSettings'));
 const CustomerJourney = lazy(() => import('./pages/CustomerJourney'));
 const LandingOptionOne = lazy(() => import('./pages/LandingOptionOne'));
 const LandingOptionTwo = lazy(() => import('./pages/LandingOptionTwo'));
@@ -428,6 +429,14 @@ function AppContent() {
             element={
               <SuperAdminProtectedRoute>
                 <Translations />
+              </SuperAdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/operator/platform-settings"
+            element={
+              <SuperAdminProtectedRoute>
+                <PlatformSettings />
               </SuperAdminProtectedRoute>
             }
           />

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
 import { FileText, TrendingUp, Users, PieChart, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatCompactNumber } from '../../lib/numberUtils';
 
 interface IncentivePlan {
   id: string;
@@ -195,7 +196,7 @@ export default function IncentivePlansSummary() {
           title={t('incentivePlans.ltipPoolVsPlanned')}
           iconColor="text-cyan-600"
           totalLabel={t('incentivePlans.totalPool')}
-          totalValue={ltipPoolTotals.total.toLocaleString()}
+          totalValue={formatCompactNumber(ltipPoolTotals.total)}
           slices={poolSlices}
           expanded={poolExpanded}
           onToggle={() => setPoolExpanded((prev) => !prev)}
@@ -212,7 +213,7 @@ export default function IncentivePlansSummary() {
           title={t('incentivePlans.plannedSharesByPlan')}
           iconColor="text-purple-600"
           totalLabel={t('dashboard.shares')}
-          totalValue={totalPlannedShares.toLocaleString()}
+          totalValue={formatCompactNumber(totalPlannedShares)}
           slices={planSlices}
           expanded={plansExpanded}
           onToggle={() => setPlansExpanded((prev) => !prev)}

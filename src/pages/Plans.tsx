@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/dateUtils';
+import { formatCompactNumber } from '../lib/numberUtils';
 import { FileText, Plus, Calendar, TrendingUp, Users, Award, MoreVertical, Edit, Trash2, PieChart, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCompanyColor } from '../hooks/useCompanyColor';
 
@@ -966,7 +967,7 @@ export default function Plans() {
 
                         <circle cx="60" cy="60" r="30" fill="white" />
                         {(() => {
-                          const sharesText = totalPool.toLocaleString();
+                          const sharesText = formatCompactNumber(totalPool);
                           const fontSize = sharesText.length > 12 ? '9' : sharesText.length > 9 ? '10' : sharesText.length > 6 ? '11' : '12';
                           return (
                             <text x="60" y="56" textAnchor="middle" className="font-bold" fill="#111827" fontSize={fontSize}>
@@ -1208,7 +1209,7 @@ export default function Plans() {
                         })}
                         <circle cx="60" cy="60" r="30" fill="white" />
                         {(() => {
-                          const sharesText = totalShares.toLocaleString();
+                          const sharesText = formatCompactNumber(totalShares);
                           const fontSize = sharesText.length > 12 ? '9' : sharesText.length > 9 ? '10' : sharesText.length > 6 ? '11' : '12';
                           return (
                             <text x="60" y="56" textAnchor="middle" className="font-bold" fill="#111827" fontSize={fontSize}>

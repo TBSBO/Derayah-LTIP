@@ -867,8 +867,8 @@ export default function EmployeeOverview() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Portfolio Overview</h1>
-        <p className="text-gray-600 mt-2">Reference site about Lorem Ipsum information.</p>
+        <h1 className="text-3xl font-bold text-gray-900">{t('employeeOverview.portfolioOverview', 'Portfolio Overview')}</h1>
+        <p className="text-gray-600 mt-2">{t('employeeOverview.portfolioOverviewDescription', 'View your equity portfolio and track your vesting progress')}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import LandingLoginButtons from '../components/LandingLoginButtons';
+import { usePlatformLogo } from '../hooks/usePlatformLogo';
 
 const ltipTypes = [
   'خطط خيارات الأسهم (SOPs)',
@@ -81,6 +82,7 @@ const features = [
 
 export default function LandingOptionFiveAR() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { logoUrl, logoScale, platformNameAr, loading: logoLoading } = usePlatformLogo();
 
   return (
     <div className="bg-white min-h-screen text-[#212529] font-['Inter',sans-serif]" dir="rtl">
@@ -89,16 +91,36 @@ export default function LandingOptionFiveAR() {
           <div className="flex items-center justify-between">
             <Link to="/concept5-ar" className="inline-flex flex-col items-end text-black hover:text-black transition">
               <div className="flex items-center gap-2">
-                <img 
-                  src="https://web.derayah.com/wp-content/themes/derayah/assets/images/logo.svg" 
-                  alt="Derayah Logo" 
-                  className="h-6 w-auto"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                  }}
-                />
-                <span className="text-lg font-semibold tracking-tight">حوافز</span>
+                {logoUrl && !logoLoading ? (
+                  <div className="h-6 flex items-center overflow-hidden">
+                    <img 
+                      src={logoUrl} 
+                      alt={platformNameAr || "شعار المنصة"} 
+                      className="h-full w-auto object-contain"
+                      style={{
+                        transform: `scale(${logoScale})`,
+                        transformOrigin: 'right center',
+                      }}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <img 
+                    src="https://web.derayah.com/wp-content/themes/derayah/assets/images/logo.svg" 
+                    alt="Derayah Logo" 
+                    className="h-6 w-auto"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                )}
+                <span className="text-lg font-semibold tracking-tight">
+                  {platformNameAr || 'حوافز'}
+                </span>
               </div>
               <span className="text-xs text-[#9e6eff] font-normal mr-8 mt-0.5">بواسطة دراية</span>
             </Link>

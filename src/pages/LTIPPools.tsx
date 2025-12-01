@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/dateUtils';
+import { formatCompactNumber } from '../lib/numberUtils';
 import { Plus, Users, TrendingUp, DollarSign, MoreVertical, Edit, Trash2, Eye, Layers, PieChart, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCompanyColor } from '../hooks/useCompanyColor';
 
@@ -716,7 +717,7 @@ export default function LTIPPools() {
                       })}
                       <circle cx="60" cy="60" r="30" fill="white" />
                       {(() => {
-                        const sharesText = totalPoolShares.toLocaleString();
+                        const sharesText = formatCompactNumber(totalPoolShares);
                         const fontSize = sharesText.length > 12 ? '9' : sharesText.length > 9 ? '10' : sharesText.length > 6 ? '11' : '12';
                         return (
                           <text x="60" y="56" textAnchor="middle" className="font-bold" fill="#111827" fontSize={fontSize}>
@@ -932,7 +933,7 @@ export default function LTIPPools() {
                       })}
                       <circle cx="60" cy="60" r="30" fill="white" />
                       {(() => {
-                        const sharesText = totalMetrics.toLocaleString();
+                        const sharesText = formatCompactNumber(totalMetrics);
                         const fontSize = sharesText.length > 12 ? '9' : sharesText.length > 9 ? '10' : sharesText.length > 6 ? '11' : '12';
                         return (
                           <text x="60" y="56" textAnchor="middle" className="font-bold" fill="#111827" fontSize={fontSize}>
@@ -1153,7 +1154,7 @@ export default function LTIPPools() {
                       })}
                       <circle cx="60" cy="60" r="30" fill="white" />
                       {(() => {
-                        const sharesText = totalUsed.toLocaleString();
+                        const sharesText = formatCompactNumber(totalUsed);
                         const fontSize = sharesText.length > 12 ? '9' : sharesText.length > 9 ? '10' : sharesText.length > 6 ? '11' : '12';
                         return (
                           <text x="60" y="56" textAnchor="middle" className="font-bold" fill="#111827" fontSize={fontSize}>

@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Increase timeout to 30 seconds - queries with retries can take longer
-      const timeoutPromise = new Promise<UserRole | null>((_, reject) => 
+      const timeoutPromise = new Promise<UserRole | null>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout')), 30000)
       );
 
@@ -138,29 +138,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Get email from session (available immediately)
         const userEmail = currentSession.user.email || '';
-        
-        // CRITICAL: FIRST check if user exists in company_users AT ALL (regardless of active status or role)
-        // If they do, they are a company-level user, NOT a platform super admin
-        // This MUST be checked before checking company_super_admin_memberships
-        const { data: anyCompanyUserCheck, error: anyCompanyUserCheckError } = await supabase
-          .from('company_users')
-          .select('user_id, company_id, role, is_active, permissions')
-          .eq('user_id', userId)
-          .limit(1);
 
+        // OPTIMIZATION: Check company_users, employees, and company_super_admin_memberships
+        // in parallel. This avoids slow retry loops for super admins who will never have
+        // company_users / employees records.
+        const [companyUserResult, employeeResult, superAdminResult] = await Promise.all([
+          supabase
+            .from('company_users')
+            .select('user_id, company_id, role, is_active, permissions')
+            .eq('user_id', userId)
+            .limit(1),
+          supabase
+            .from('employees')
+            .select('id, company_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
+          supabase
+            .from('company_super_admin_memberships')
+            .select('user_id')
+            .eq('user_id', userId)
+            .limit(1),
+        ]);
+
+        const { data: anyCompanyUserCheck, error: anyCompanyUserCheckError } = companyUserResult;
+        const { data: employeeData, error: employeeError } = employeeResult;
+        const { data: superAdminMemberships, error: superAdminError } = superAdminResult;
+
+        // Handle errors
         if (anyCompanyUserCheckError) {
           console.warn('❌ Error checking for any company user (first check):', anyCompanyUserCheckError);
           // If it's a permission error and we haven't retried, try again
           if (anyCompanyUserCheckError.code === '42501' && retryCount < maxRetries) {
-            console.log(`⏳ Retrying in ${(retryCount + 1) * 1000}ms...`);
+            console.log(`⏳ Permission error, retrying in ${(retryCount + 1) * 1000}ms...`);
             isLoadingUserRoleRef.current = false;
             currentLoadingUserIdRef.current = null;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+            await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
             return loadUserRole(userId, retryCount + 1, maxRetries);
           }
         }
 
-        // If user exists in company_users at all (even if inactive or role='super_admin'),
+        if (employeeError) {
+          console.warn('Error fetching employee data:', employeeError);
+        }
+
+        if (superAdminError) {
+          console.warn('❌ Error checking super admin membership:', superAdminError);
+        }
+
+        // PRIORITY 1: If user exists in company_users at all (even if inactive or role='super_admin'),
         // they are a company-level user, NOT a platform super admin
         if (anyCompanyUserCheck && anyCompanyUserCheck.length > 0) {
           const companyUser = anyCompanyUserCheck[0];
@@ -188,18 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return userRoleResult;
         }
         
-        // SECOND: Check employees table BEFORE retrying
-        // If user is not in company_users, they might be an employee
-        const { data: employeeData, error: employeeError } = await supabase
-          .from('employees')
-          .select('id, company_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (employeeError) {
-          console.warn('Error fetching employee data:', employeeError);
-        }
-          
+        // PRIORITY 2: If user exists in employees, they are an employee
         if (employeeData) {
           console.log('✅ User exists in employees table, treating as employee');
           return {
@@ -212,99 +226,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user_type: 'employee' as const
           };
         }
-        
-        // If no company_users record found and no employee found, retry
-        // (in case of race condition during user creation)
-        if (retryCount < maxRetries) {
-          console.log(`⏳ No company_users or employees record found yet, retrying in ${(retryCount + 1) * 1000}ms...`);
-          isLoadingUserRoleRef.current = false;
-          currentLoadingUserIdRef.current = null;
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return loadUserRole(userId, retryCount + 1, maxRetries);
-        }
-        
-        // SECOND: Check company_users for active company admin roles (non-super_admin)
-        // This is a secondary check for optimization, but the first check above should catch all cases
-        const { data: companyUserRows, error: companyUserError } = await supabase
-          .from('company_users')
-          .select('user_id, company_id, role, is_active, permissions, created_at')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .neq('role', 'super_admin')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (companyUserError) {
-          console.warn('❌ Error fetching company user:', companyUserError);
-        } else {
-          console.log('✅ Fetched company user data:', companyUserRows?.[0]);
-        }
-
-        const companyUserData = companyUserRows?.[0] ?? null;
-        
-        if (companyUserData) {
-          // User is a company admin - return immediately
-          const userRoleResult = {
-            user_id: companyUserData.user_id,
-            email: userEmail,
-            company_id: companyUserData.company_id,
-            role: companyUserData.role,
-            is_active: companyUserData.is_active,
-            permissions: (companyUserData.permissions as Record<string, boolean> | null) ?? null,
-            user_type: 'company_admin' as const
-          };
-          
-          console.log('✅ loadUserRole: Created userRole object (company admin):', {
-            role: userRoleResult.role,
-            user_type: userRoleResult.user_type,
-            company_id: userRoleResult.company_id,
-            fullObject: userRoleResult
-          });
-          
-          return userRoleResult;
-        }
-        
-        // THIRD: Only if user has NO company association (not in company_users, not in employees),
-        // then check for platform super admin. Platform super admins are NOT tied to specific companies.
-        // IMPORTANT: If a user is in company_super_admin_memberships BUT also has any company association,
-        // they should be treated as a company-level user, not a platform super admin.
-        
-        // CRITICAL: Final safety check - ensure user is NOT in company_users before checking super admin
-        // This prevents any edge cases where company_users query might have failed
-        const { data: finalCompanyUsersCheck } = await supabase
-          .from('company_users')
-          .select('company_id, role')
-          .eq('user_id', userId)
-          .limit(1);
-
-        // If user is found in company_users at this point, treat as company admin (safety fallback)
-        if (finalCompanyUsersCheck && finalCompanyUsersCheck.length > 0) {
-          console.log('⚠️ Final check: User found in company_users - treating as company admin (not platform super admin)');
-          const companyUser = finalCompanyUsersCheck[0];
-          return {
-            user_id: userId,
-            email: userEmail,
-            company_id: companyUser.company_id,
-            role: companyUser.role || 'company_admin',
-            is_active: true,
-            permissions: null,
-            user_type: 'company_admin' as const  // ALWAYS company_admin if in company_users
-          };
-        }
-
-        const { data: superAdminMemberships, error: superAdminError } = await supabase
-          .from('company_super_admin_memberships')
-          .select('user_id')
-          .eq('user_id', userId)
-          .limit(1);
-
-        if (superAdminError) {
-          console.warn('❌ Error checking super admin membership:', superAdminError);
-        }
-
-        // Only treat as platform super admin if:
-        // 1. They are in company_super_admin_memberships
-        // 2. They have NO company association (verified by ALL checks above)
+        // PRIORITY 3: If user is in company_super_admin_memberships and NOT in company_users/employees,
+        // they are a platform super admin - return immediately without retrying
         if (superAdminMemberships && superAdminMemberships.length > 0) {
           // Final safety check: ensure user has no company association
           // Triple-check to prevent any edge cases
@@ -313,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .select('company_id')
             .eq('user_id', userId)
             .limit(1);
-          
+
           const { data: tripleCheckEmployee } = await supabase
             .from('employees')
             .select('company_id')
@@ -331,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: 'company_admin',
               is_active: true,
               permissions: null,
-              user_type: 'company_admin' as const
+              user_type: 'company_admin' as const,
             };
           }
 
@@ -344,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: 'employee',
               is_active: true,
               permissions: null,
-              user_type: 'employee' as const
+              user_type: 'employee' as const,
             };
           }
 
@@ -352,17 +275,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userRoleResult = {
             user_id: userId,
             email: userEmail,
-            company_id: null,  // Super admins don't have a default company
+            company_id: null, // Super admins don't have a default company
             role: 'super_admin',
             is_active: true,
             permissions: null,
-            user_type: 'super_admin' as const
+            user_type: 'super_admin' as const,
           };
-          
+
           console.log('✅ loadUserRole: User is platform super admin (no company association):', userRoleResult);
           return userRoleResult;
         }
-        
+
+        // Only retry if no records found in any table (possible race condition during user creation)
+        if (!anyCompanyUserCheck && !employeeData && (!superAdminMemberships || superAdminMemberships.length === 0) && retryCount < maxRetries) {
+          console.log(`⏳ No company_users, employees, or super admin record found yet, retrying in ${(retryCount + 1) * 1000}ms...`);
+          isLoadingUserRoleRef.current = false;
+          currentLoadingUserIdRef.current = null;
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return loadUserRole(userId, retryCount + 1, maxRetries);
+        }
+
+        // Nothing found and no more retries – treat as unknown user_type
         return null;
       })();
 
